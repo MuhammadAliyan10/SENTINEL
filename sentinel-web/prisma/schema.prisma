@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+/// User roles in the system
+enum UserRole {
+  admin
+  student
+  guard
+}
+
+/// Status of an entry scan
+enum EntryStatus {
+  allowed
+  rejected
+  re_entry @map("re-entry")
+}
+
+/// Profile table linked to Supabase Auth
+model Profile {
+  id             String   @id @db.Uuid
+  full_name      String
+  sap_id         String?  @unique
+  role           UserRole @default(student)
+  payment_status Boolean  @default(false)
+  photo_url      String?
+  totp_secret    String
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  // Relations
+  entry_logs EntryLog[]
+
+  @@index([sap_id])
+  @@index([role])
+  @@map("profiles")
+}
+
+/// Log of all gate entries
+model EntryLog {
+  id              String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  student_id      String      @db.Uuid
+  scan_type       String      @default("entry")
+  timestamp       DateTime    @default(now()) @db.Timestamptz(6)
+  status          EntryStatus
+  guard_device_id String?
+  location        String?
+  notes           String?
+  created_at      DateTime    @default(now()) @db.Timestamptz(6)
+
+  // Relations
+  student Profile @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@index([student_id])
+  @@index([timestamp(sort: Desc)])
+  @@map("entry_logs")
+}

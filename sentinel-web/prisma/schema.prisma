@@ -1,5 +1,5 @@
 // --------------------------------------------------------
-// SENTINEL DATABASE SCHEMA (Production Ready)
+// SENTINEL DATABASE SCHEMA (Production Ready - Enhanced)
 // --------------------------------------------------------
 
 generator client {
@@ -41,6 +41,14 @@ enum ScanType {
   EXIT
 }
 
+enum EventStatus {
+  DRAFT        // Event not yet published
+  PUBLISHED    // Live and accepting registrations
+  ACTIVE       // Event day - gates open
+  COMPLETED    // Event finished
+  CANCELLED    // Event cancelled
+}
+
 // --------------------------------------------------------
 // MODELS
 // --------------------------------------------------------
@@ -63,6 +71,11 @@ model User {
   role            UserRole @default(STUDENT)
   activationToken String?  @unique @map("activation_token") // The 6-char secret for Student Login (Indexed)
   passwordHash    String?  @map("password_hash") // For Admins/CRs only
+
+  // SECURITY: Track failed login attempts for rate limiting
+  failedLoginAttempts Int      @default(0) @map("failed_login_attempts")
+  lastFailedLogin     DateTime? @map("last_failed_login")
+  lockedUntil         DateTime? @map("locked_until")
 
   // --- STATUS FLAGS ---
   isPaid           Boolean @default(true) @map("is_paid") // Default true as per requirements
@@ -102,6 +115,8 @@ model User {
   @@index([activationToken])
   @@index([role, isActive]) // For "Get All Active Students" queries
   @@index([createdById]) // For "Manager Ledger" lookups
+  @@index([isPaid, role]) // For payment filtering
+  @@index([createdAt]) // For date-based queries
   @@map("users")
 }
 
@@ -122,18 +137,25 @@ model AccessLog {
   type   ScanType
 
   // --- CONTEXT ---
-  gateNumber      String? @map("gate_number")       // "Gate 1", "Female Lane"
+  gateNumber String? @map("gate_number") // "Gate 1", "Female Lane"
+
+  // --- EVENT REFERENCE ---
+  eventId String? @map("event_id")
+  event   Event?  @relation(fields: [eventId], references: [id])
 
   // --- METADATA ---
   metadata Json? // Store extra debug info if needed
 
   @@index([userId])
   @@index([timestamp]) // For "Live Dashboard" queries
+  @@index([userId, timestamp]) // Composite for user history
+  @@index([eventId, timestamp]) // For event-specific queries
+  @@index([status, timestamp]) // For security alerts
   @@map("access_logs")
 }
 
 // --------------------------------------------------------
-// AUDIT LOG (For Admin Actions)
+// AUDIT LOG (For Admin Actions - Immutable)
 // --------------------------------------------------------
 
 model AuditLog {
@@ -147,6 +169,14 @@ model AuditLog {
   targetId  String?  @map("target_id") // Who was affected?
   details   String?  // JSON or Text
 
+  // IP and User Agent for security audit
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+
+  @@index([performerId])
+  @@index([targetId])
+  @@index([action])
+  @@index([timestamp])
   @@map("audit_logs")
 }
 
@@ -155,8 +185,50 @@ model AuditLog {
 // --------------------------------------------------------
 
 model SystemSettings {
-  key   String @id
-  value String
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_settings")
+}
+
+// --------------------------------------------------------
+// EVENT (Dynamic Event Configuration)
+// --------------------------------------------------------
+
+model Event {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // --- EVENT DETAILS ---
+  name        String           // "CS Annual Dinner 2025"
+  venue       String?          // "Royal Palm Golf & Country Club"
+  date        DateTime         // Event date
+  startTime   DateTime?        @map("start_time")
+  endTime     DateTime?        @map("end_time")
+  description String?
+
+  // --- BRANDING ---
+  logoUrl     String?          @map("logo_url")
+  bannerUrl   String?          @map("banner_url")
+  primaryColor String?         @map("primary_color") // Hex color
+
+  // --- CAPACITY ---
+  maxCapacity Int?             @map("max_capacity")
+
+  // --- STATUS ---
+  status      EventStatus      @default(DRAFT)
+  isDefault   Boolean          @default(false) @map("is_default") // Current active event
+
+  // --- PRICING ---
+  ticketPrice Int              @default(2000) @map("ticket_price")
+
+  // --- RELATIONS ---
+  accessLogs  AccessLog[]
+
+  @@index([status])
+  @@index([isDefault])
+  @@index([date])
+  @@map("events")
 }

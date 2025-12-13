@@ -1,8 +1,15 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
+import { requireSuperAdmin as requireSuperAdminAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
+
+// Use centralized auth
+async function requireSuperAdmin(): Promise<string> {
+  const user = await requireSuperAdminAuth();
+  return user.id;
+}
 
 // ============================================
 // TYPES
@@ -39,35 +46,14 @@ export interface ActionResult {
   message: string;
 }
 
-// ============================================
-// AUTHORIZATION HELPER
-// ============================================
-
-async function requireSuperAdmin(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Authentication required");
-  }
-
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { role: true },
-  });
-
-  if (!dbUser || dbUser.role !== "SUPER_ADMIN") {
-    throw new Error("Super Admin access required");
-  }
-
-  return user.id;
-}
+// Use centralized auth from above
 
 // ============================================
 // SEARCH STUDENTS
 // ============================================
+
+// SECURITY: Maximum search query length to prevent DoS
+const MAX_SEARCH_LENGTH = 100;
 
 export async function searchStudents(query: string): Promise<{
   success: boolean;
@@ -85,10 +71,19 @@ export async function searchStudents(query: string): Promise<{
       };
     }
 
+    // SECURITY: Limit query length to prevent DoS
+    if (query.length > MAX_SEARCH_LENGTH) {
+      return {
+        success: false,
+        students: [],
+        message: `Search query too long (max ${MAX_SEARCH_LENGTH} characters)`,
+      };
+    }
+
     const searchTerm = query.trim();
     const isSapId = /^\d+$/.test(searchTerm);
 
-    const where: any = {
+    const where: Prisma.UserWhereInput = {
       role: "STUDENT",
       OR: [
         { fullName: { contains: searchTerm, mode: "insensitive" } },
@@ -370,7 +365,11 @@ export async function getAllStudents(
 }> {
   await requireSuperAdmin();
 
-  const skip = (page - 1) * limit;
+  // SECURITY: Validate pagination parameters to prevent DoS
+  const safePage = Math.max(1, Math.floor(page));
+  const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+
+  const skip = (safePage - 1) * safeLimit;
   const where: any = { role: "STUDENT" };
 
   if (filter === "paid") where.isPaid = true;
@@ -380,7 +379,7 @@ export async function getAllStudents(
     prisma.user.findMany({
       where,
       skip,
-      take: limit,
+      take: safeLimit,
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -414,7 +413,7 @@ export async function getAllStudents(
   return {
     data,
     total,
-    pageCount: Math.ceil(total / limit),
+    pageCount: Math.ceil(total / safeLimit),
   };
 }
 
@@ -512,6 +511,188 @@ export async function manualPaymentOverride(
       success: false,
       message:
         error instanceof Error ? error.message : "Failed to mark payment",
+    };
+  }
+}
+
+// ============================================
+// MANUAL CHECK-IN (Emergency Override)
+// ============================================
+
+/**
+ * Manually check-in a student when scanner fails or phone unavailable.
+ * Creates an ENTRY access log with "Manual Override" note.
+ */
+export async function manualCheckIn(studentId: string): Promise<ActionResult> {
+  try {
+    const adminId = await requireSuperAdmin();
+
+    if (!studentId) {
+      return { success: false, message: "Student ID is required" };
+    }
+
+    // Verify target is a student
+    const student = await prisma.user.findUnique({
+      where: { id: studentId },
+      select: { role: true, fullName: true, sapId: true, isActive: true },
+    });
+
+    if (!student) {
+      return { success: false, message: "Student not found" };
+    }
+
+    if (student.role !== "STUDENT") {
+      return { success: false, message: "Target user is not a student" };
+    }
+
+    if (!student.isActive) {
+      return { success: false, message: "Student access is revoked" };
+    }
+
+    // Check if student is already inside (has recent ENTRY without EXIT)
+    const lastLog = await prisma.accessLog.findFirst({
+      where: { userId: studentId },
+      orderBy: { timestamp: "desc" },
+    });
+
+    if (lastLog && lastLog.type === "ENTRY") {
+      return {
+        success: false,
+        message: "Student is already checked in",
+      };
+    }
+
+    // Create ENTRY access log
+    await prisma.accessLog.create({
+      data: {
+        userId: studentId,
+        type: "ENTRY",
+        status: "GRANTED",
+        metadata: { source: "Manual Override - Admin Check-In" },
+        scannerId: adminId,
+      },
+    });
+
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        performerId: adminId,
+        action: "MANUAL_CHECKIN",
+        targetId: studentId,
+        details: `Manual check-in for ${student.sapId} (${
+          student.fullName || "Unknown"
+        })`,
+      },
+    });
+
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/live");
+
+    return {
+      success: true,
+      message: `${student.fullName || student.sapId} checked in successfully`,
+    };
+  } catch (error) {
+    console.error("Manual Check-In Error:", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Failed to check in student",
+    };
+  }
+}
+
+// ============================================
+// EXPORT ATTENDEES CSV
+// ============================================
+
+export interface AttendeeExport {
+  sapId: string;
+  fullName: string;
+  gender: string;
+  section: string;
+  semester: string;
+  entryTime: string;
+}
+
+/**
+ * Get all students currently inside the venue (ENTRY with no subsequent EXIT).
+ * Returns data formatted for CSV export.
+ */
+export async function getAttendeesForExport(): Promise<{
+  success: boolean;
+  data: AttendeeExport[];
+  message?: string;
+}> {
+  try {
+    await requireSuperAdmin();
+
+    // Get today's date boundaries
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Find all students with ENTRY logs today
+    const studentsWithEntry = await prisma.user.findMany({
+      where: {
+        role: "STUDENT",
+        accessLogs: {
+          some: {
+            type: "ENTRY",
+            timestamp: {
+              gte: today,
+              lt: tomorrow,
+            },
+          },
+        },
+      },
+      select: {
+        sapId: true,
+        fullName: true,
+        gender: true,
+        section: true,
+        semester: true,
+        accessLogs: {
+          where: {
+            timestamp: {
+              gte: today,
+              lt: tomorrow,
+            },
+          },
+          orderBy: { timestamp: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    // Filter to only those whose LAST log is ENTRY (currently inside)
+    const attendees: AttendeeExport[] = studentsWithEntry
+      .filter(
+        (s) => s.accessLogs.length > 0 && s.accessLogs[0].type === "ENTRY"
+      )
+      .map((s) => ({
+        sapId: s.sapId,
+        fullName: s.fullName || "Unknown",
+        gender: s.gender || "N/A",
+        section: s.section || "N/A",
+        semester: s.semester || "N/A",
+        entryTime: s.accessLogs[0].timestamp.toLocaleTimeString("en-US", {
+          hour12: true,
+        }),
+      }));
+
+    return {
+      success: true,
+      data: attendees,
+    };
+  } catch (error) {
+    console.error("Export Attendees Error:", error);
+    return {
+      success: false,
+      data: [],
+      message:
+        error instanceof Error ? error.message : "Failed to export attendees",
     };
   }
 }

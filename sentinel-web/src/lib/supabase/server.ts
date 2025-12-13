@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import type { Database, Profile, ProfileSafe } from "@/types/database";
+import type { Database } from "@/types/database";
 
 /**
  * Creates a Supabase client for use in Server Components and Server Actions
@@ -34,7 +34,7 @@ export async function createClient() {
 }
 
 /**
- * Gets the current authenticated user
+ * Gets the current authenticated user from Supabase Auth
  * Returns null if not authenticated
  */
 export async function getUser() {
@@ -46,94 +46,6 @@ export async function getUser() {
 
   if (error || !user) return null;
   return user;
-}
-
-/**
- * Gets the current user's profile
- * Returns null if not authenticated or profile not found
- */
-export async function getUserProfile(): Promise<Profile | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  return profile as Profile | null;
-}
-
-/**
- * Gets the current user's safe profile (without totp_secret)
- */
-export async function getUserProfileSafe(): Promise<ProfileSafe | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  // Query profiles_safe view (excludes totp_secret)
-  const { data: profile } = await supabase
-    .from("profiles_safe")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  return profile as ProfileSafe | null;
-}
-
-/**
- * Checks if the current user is an admin
- */
-export async function isAdmin(): Promise<boolean> {
-  const profile = await getUserProfile();
-  return profile?.role === "admin";
-}
-
-/**
- * Gets the current user's role
- * Returns null if not authenticated or profile not found
- */
-export async function getUserRole(): Promise<
-  "admin" | "student" | "guard" | null
-> {
-  const profile = await getUserProfile();
-  return profile?.role || null;
-}
-
-/**
- * Authorization check for server actions
- * Throws an error if user is not authenticated or not admin
- */
-export async function requireAdmin(): Promise<{ userId: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Authentication required");
-  }
-
-  const { data: profile } = (await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single()) as { data: { role: string } | null };
-
-  if (profile?.role !== "admin") {
-    throw new Error("Admin access required");
-  }
-
-  return { userId: user.id };
 }
 
 /**
@@ -152,3 +64,16 @@ export async function requireAuth(): Promise<{ userId: string }> {
 
   return { userId: user.id };
 }
+
+// =============================================================================
+// DEPRECATED FUNCTIONS - DO NOT USE
+// =============================================================================
+// The following functions are kept for backwards compatibility but should NOT
+// be used in new code. Use @/lib/auth functions with Prisma instead.
+//
+// - getUserProfile() - Use prisma.user.findUnique() instead
+// - getUserProfileSafe() - Use prisma.user.findUnique() with select instead
+// - isAdmin() - Use requireSuperAdmin() from @/lib/auth instead
+// - getUserRole() - Use prisma.user.findUnique({ select: { role: true }}) instead
+// - requireAdmin() - Use requireSuperAdmin() from @/lib/auth instead
+// =============================================================================

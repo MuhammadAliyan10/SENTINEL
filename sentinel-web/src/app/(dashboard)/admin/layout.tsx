@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { Toaster } from "@/components/ui/sonner";
 import {
   SidebarProvider,
   SidebarInset,
@@ -70,7 +69,6 @@ export default async function AdminLayout({
           {children}
         </main>
       </SidebarInset>
-      <Toaster />
     </SidebarProvider>
   );
 }

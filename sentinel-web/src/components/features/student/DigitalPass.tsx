@@ -1,179 +1,343 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { HmacSHA256 } from "crypto-js";
-import { WifiOff, Loader2 } from "lucide-react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { createClient } from "@/lib/supabase/client";
+import {
+  WifiOff,
+  Loader2,
+  CheckCircle2,
+  PartyPopper,
+  ShieldCheck,
+  Clock,
+} from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
+// ============================================
+// TYPES
+// ============================================
+
+interface UserProfile {
+  id: string;
+  sapId: string;
+  fullName: string | null;
+  profilePhotoUrl: string | null;
+  gender: "MALE" | "FEMALE" | "OTHER" | null;
+  section: string | null;
+}
+
 interface DigitalPassProps {
-  user: {
-    id: string;
-    sapId: string;
-    fullName: string | null;
-    profilePhotoUrl: string | null;
-    gender: "MALE" | "FEMALE" | "OTHER" | null;
-    section: string | null;
-    activationToken: string | null;
+  user: UserProfile;
+  initialQrData: {
+    payload: string;
+    expiresAt: number;
   };
 }
 
-export default function DigitalPass({ user }: DigitalPassProps) {
-  const [qrPayload, setQrPayload] = useState<string>("");
+type AccessState = "OUTSIDE" | "INSIDE" | "LOADING";
+
+// ============================================
+// COMPONENT
+// ============================================
+
+export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
+  // ----------------------------------------
+  // STATE
+  // ----------------------------------------
+  const [qrPayload, setQrPayload] = useState<string>(initialQrData.payload);
+  const [accessState, setAccessState] = useState<AccessState>("LOADING");
   const [isOffline, setIsOffline] = useState(false);
-  const qrRef = useRef<HTMLDivElement>(null);
-  const qrCodeInstance = useRef<any>(null);
+  const [lastEntry, setLastEntry] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
+  const supabase = createClient();
+  const qrIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ----------------------------------------
+  // SECURITY: LIVE CLOCK (Anti-Screenshot)
+  // ----------------------------------------
   useEffect(() => {
-    // Initial state
-    updateQr();
-    setIsOffline(!navigator.onLine);
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-    // Intervals
-    const qrInterval = setInterval(updateQr, 15000); // Refresh signature every 15 seconds
+  // ----------------------------------------
+  // QR CODE REFRESH (Server-side generation)
+  // ----------------------------------------
+  const refreshQrPayload = useCallback(async () => {
+    if (isRefreshing || isOffline) return;
 
-    function updateQr() {
-      if (!user.activationToken) return;
-
-      const timestamp = Date.now();
-      const payloadString = `${user.sapId}:${timestamp}`;
-
-      // HMAC-SHA256 signature using crypto-js
-      const signature = HmacSHA256(
-        payloadString,
-        user.activationToken
-      ).toString();
-
-      // Final payload as JSON
-      const payload = JSON.stringify({
-        sap: user.sapId,
-        ts: timestamp,
-        sig: signature,
+    setIsRefreshing(true);
+    try {
+      // Fetch new QR code from server API
+      const response = await fetch("/api/qr/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
       });
 
-      setQrPayload(payload);
+      if (response.ok) {
+        const data = await response.json();
+        setQrPayload(data.payload);
+      }
+    } catch (error) {
+      console.error("Failed to refresh QR:", error);
+    } finally {
+      setIsRefreshing(false);
     }
+  }, [user.id, isRefreshing, isOffline]);
 
-    // Network listeners
+  // ----------------------------------------
+  // INITIAL ACCESS STATE CHECK
+  // ----------------------------------------
+  const checkInitialAccessState = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("access_logs")
+        .select("type, timestamp")
+        .eq("user_id", user.id)
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (data && !error) {
+        const logData = data as { type: string; timestamp: string };
+        if (logData.type === "ENTRY") {
+          setAccessState("INSIDE");
+          setLastEntry(new Date(logData.timestamp));
+        } else {
+          setAccessState("OUTSIDE");
+        }
+      } else {
+        setAccessState("OUTSIDE");
+      }
+    } catch (err) {
+      console.error("Initial state check failed:", err);
+      setAccessState("OUTSIDE");
+    }
+  }, [supabase, user.id]);
+
+  // ----------------------------------------
+  // REALTIME SUBSCRIPTION
+  // ----------------------------------------
+  const setupRealtimeSubscription = useCallback(() => {
+    const channel = supabase
+      .channel(`access-logs-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "access_logs",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newLog = payload.new as { type: string; timestamp: string };
+
+          if (newLog.type === "ENTRY") {
+            setAccessState("INSIDE");
+            setLastEntry(new Date(newLog.timestamp));
+          } else if (newLog.type === "EXIT") {
+            setAccessState("OUTSIDE");
+            setLastEntry(null);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, user.id]);
+
+  // ----------------------------------------
+  // CONNECTIVITY MONITORING
+  // ----------------------------------------
+  const setupConnectivityMonitor = useCallback(() => {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
+
+    setIsOffline(!navigator.onLine);
+
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
     return () => {
-      clearInterval(qrInterval);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [user.id, user.sapId, user.activationToken]);
+  }, []);
 
-  // Generate stylized QR code using qr-code-styling
+  // ----------------------------------------
+  // EFFECTS
+  // ----------------------------------------
   useEffect(() => {
-    if (!qrPayload || !qrRef.current) return;
+    qrIntervalRef.current = setInterval(refreshQrPayload, 15000);
+    checkInitialAccessState();
+    const unsubscribeRealtime = setupRealtimeSubscription();
+    const unsubscribeConnectivity = setupConnectivityMonitor();
 
-    const initQR = async () => {
-      const QRCodeStyling = (await import("qr-code-styling")).default;
-
-      // Clear previous QR
-      if (qrRef.current) {
-        qrRef.current.innerHTML = "";
-      }
-
-      // Create new stylized QR
-      qrCodeInstance.current = new QRCodeStyling({
-        width: 360,
-        height: 360,
-        type: "svg",
-        data: qrPayload,
-        dotsOptions: {
-          color: "#1a1a1a",
-          type: "rounded",
-        },
-        cornersSquareOptions: {
-          color: "#1a1a1a",
-          type: "extra-rounded", // Rounded corner squares
-        },
-        cornersDotOptions: {
-          color: "#1a1a1a",
-          type: "dot", // Circular corner dots
-        },
-        backgroundOptions: {
-          color: "#ffffff",
-        },
-        imageOptions: {
-          crossOrigin: "anonymous",
-          margin: 8,
-          imageSize: 0.4,
-        },
-
-        qrOptions: {
-          errorCorrectionLevel: "H",
-        },
-      });
-
-      if (qrRef.current) {
-        qrCodeInstance.current.append(qrRef.current);
-      }
+    return () => {
+      if (qrIntervalRef.current) clearInterval(qrIntervalRef.current);
+      unsubscribeRealtime();
+      unsubscribeConnectivity();
     };
+  }, [
+    refreshQrPayload,
+    checkInitialAccessState,
+    setupRealtimeSubscription,
+    setupConnectivityMonitor,
+  ]);
 
-    initQR();
-  }, [qrPayload]);
-
-  // Online/Offline border colors
-  const borderColor = isOffline ? "border-yellow-400" : "border-none";
-
-  if (!qrPayload) {
+  // ----------------------------------------
+  // RENDER: Loading State
+  // ----------------------------------------
+  if (accessState === "LOADING" || !qrPayload) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
   }
 
+  // ----------------------------------------
+  // RENDER: Inside State (Entry Success)
+  // ----------------------------------------
+  if (accessState === "INSIDE") {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-gray-50 p-4 overflow-hidden">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center space-y-6">
+          <div className="mx-auto w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center">
+            <PartyPopper className="h-10 w-10 text-emerald-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Welcome!</h1>
+            <p className="text-slate-500 mt-1">{user.fullName || "Guest"}</p>
+          </div>
+          {lastEntry && (
+            <div className="bg-emerald-50 rounded-xl p-4">
+              <p className="text-xs text-emerald-600 uppercase font-medium">
+                Entered At
+              </p>
+              <p className="text-lg font-mono font-bold text-emerald-700">
+                {lastEntry.toLocaleTimeString("en-US", { hour12: true })}
+              </p>
+            </div>
+          )}
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-full text-sm font-medium">
+            <CheckCircle2 className="h-4 w-4" />
+            You&apos;re Inside
+          </div>
+          <p className="text-xs text-slate-400">
+            Scan again at exit to check out
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------
+  // RENDER: Outside State (Show QR)
+  // ----------------------------------------
   return (
-    <div className="h-screen flex flex-col items-center justify-center bg-gray-50 p-4 overflow-hidden">
-      {/* Pass Card - Airline Boarding Pass Style */}
-      <div className="w-full max-w-sm py-4 bg-white rounded-xl shadow-lg overflow-hidden">
-        {/* Header with Logo Centered */}
-        <div className="bg-white p-4 border-b border-gray-400 flex flex-col items-center">
-          <Image
-            src="/UniversityLogo.jpeg"
-            alt="University"
-            width={300}
-            height={200}
-            className="object-contain mb-2"
-          />
-          <span className="text-md font-semibold text-slate-900 tracking-wide">
-            CS Annual Dinner 2025
-          </span>
+    <div
+      className="h-screen flex flex-col items-center justify-center bg-gray-50 p-4 overflow-hidden"
+      onContextMenu={(e) => e.preventDefault()} // Disable Right Click
+    >
+      {/* SECURITY: Pulsing Background Animation */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent animate-pulse-slow" />
+      </div>
+
+      {/* Pass Card */}
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden z-10 relative border border-white/10">
+        {/* Live Header */}
+        {/* Offline Indicator (Non-blocking) */}
+        {isOffline && (
+          <div className="bg-yellow-50 p-3 border-b border-yellow-100 flex items-center justify-center gap-2 text-yellow-700 animate-in slide-in-from-top duration-300">
+            <WifiOff className="h-4 w-4" />
+            <span className="text-xs font-semibold">
+              Offline Mode • Using last valid code
+            </span>
+          </div>
+        )}
+
+        {/* User Info */}
+        <div className="p-6 pb-2 text-center bg-white">
+          <div className="relative w-24 h-24 mx-auto mb-3">
+            {user.profilePhotoUrl ? (
+              <Image
+                src={user.profilePhotoUrl}
+                alt="Profile"
+                fill
+                className="rounded-full object-cover border-4 border-slate-100 shadow-sm"
+              />
+            ) : (
+              <div className="w-full h-full rounded-full bg-slate-200" />
+            )}
+            {/* Active Indicator */}
+            <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full animate-bounce" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 truncate">
+            {user.fullName}
+          </h2>
+          <p className="text-sm text-slate-500 font-mono mt-1">{user.sapId}</p>
         </div>
 
         {/* QR Code Section */}
-        <div
-          className={cn(
-            "p-6 bg-white relative border-4 transition-colors duration-300",
-            borderColor
-          )}
-        >
-          {/* Stylized QR Code Container */}
-          <div className="flex justify-center">
-            <div
-              ref={qrRef}
-              className="flex items-center justify-center"
-              style={{ minHeight: 380, minWidth: 380 }}
-            />
+        <div className="p-6 pt-2 bg-white flex flex-col items-center">
+          <div
+            className={cn(
+              "p-4 bg-white rounded-xl border-4 transition-all duration-300 shadow-inner",
+              isOffline ? "border-yellow-400" : "border-primary/20"
+            )}
+          >
+            <div className="relative">
+              <QRCodeSVG
+                value={qrPayload}
+                size={320}
+                level="H"
+                includeMargin={true}
+                className="rounded-lg"
+              />
+              {/* Holographic Overlay Effect (CSS) */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent opacity-0 animate-shimmer pointer-events-none" />
+            </div>
           </div>
 
-          {/* Offline Overlay */}
-          {isOffline && (
-            <div className="absolute inset-0 bg-white/95 z-20 flex flex-col items-center justify-center">
-              <WifiOff className="h-10 w-10 text-yellow-500 mb-2" />
-              <p className="font-semibold text-yellow-700">OFFLINE MODE</p>
-              <p className="text-xs text-slate-500">Using cached ticket</p>
-            </div>
-          )}
+          {/* Status Text */}
+          <div className="mt-4 flex items-center gap-2">
+            {isRefreshing ? (
+              <span className="text-xs text-primary flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Refreshing code...
+              </span>
+            ) : isOffline ? (
+              <span className="text-xs text-yellow-600 flex items-center gap-1 font-medium">
+                <WifiOff className="h-3 w-3" />
+                Offline • Auto-reconnects
+              </span>
+            ) : (
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                Live Code • Auto-updates
+              </span>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Background Date Watermark */}
+      {/* <div className="absolute bottom-8 text-slate-800/50 font-black text-6xl tracking-tighter pointer-events-none z-0">
+        {currentTime.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        })}
+      </div> */}
     </div>
   );
 }

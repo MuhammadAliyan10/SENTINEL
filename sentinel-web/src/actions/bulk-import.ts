@@ -1,23 +1,14 @@
 "use server";
 
-import { authenticator } from "otplib";
 import { revalidatePath } from "next/cache";
-import { createClient, requireAdmin } from "@/lib/supabase/server";
-import type {
-  ProcessedStudent,
-  BulkImportResult,
-  CSVStudentRow,
-} from "@/types/database";
+import { prisma } from "@/lib/prisma";
+import { requireSuperAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { CSVStudentRow, BulkImportResult } from "@/types/database";
+import { randomBytes } from "crypto";
 
-// Configure TOTP authenticator
-authenticator.options = {
-  digits: 6,
-  step: 30,
-  window: 1,
-};
-
-// Maximum rows allowed per import
-const MAX_IMPORT_ROWS = 2000;
+// Maximum rows allowed per import (prevent DoS)
+const MAX_IMPORT_ROWS = 500;
 
 /**
  * Validate SAP ID format (8 digits)
@@ -27,23 +18,54 @@ function isValidSapId(sapId: string): boolean {
 }
 
 /**
- * Generate a unique TOTP secret
+ * Generate a secure 6-character activation token
+ * Avoiding ambiguous characters like I, l, 1, O, 0
  */
-function generateTotpSecret(): string {
-  return authenticator.generateSecret();
+function generateToken(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let token = "";
+  const randomValues = randomBytes(6);
+
+  for (let i = 0; i < 6; i++) {
+    token += chars[randomValues[i] % chars.length];
+  }
+
+  return token;
 }
 
 /**
- * Validate CSV data without generating secrets
- * Used for preview/dry-run
+ * Sanitize user input to prevent XSS
+ * Removes HTML tags, script content, and dangerous characters
  */
-function validateCSVData(rows: CSVStudentRow[]): {
-  validCount: number;
+function sanitizeName(name: string): string {
+  return name
+    .trim()
+    .replace(/<[^>]*>/g, "") // Remove HTML tags
+    .replace(/javascript:/gi, "") // Remove javascript: protocol
+    .replace(/on\w+=/gi, "") // Remove event handlers like onclick=
+    .replace(/[<>"'`]/g, ""); // Remove potentially dangerous chars
+}
+
+interface ProcessedStudent {
+  sapId: string;
+  fullName: string;
+  email: string;
+  isPaid: boolean;
+  activationToken: string;
+  section?: string;
+  semester?: string;
+}
+
+/**
+ * Process and validate CSV data
+ */
+function processCSVData(rows: CSVStudentRow[]): {
+  valid: ProcessedStudent[];
   errors: string[];
 } {
+  const valid: ProcessedStudent[] = [];
   const errors: string[] = [];
   const seenSapIds = new Set<string>();
-  let validCount = 0;
 
   rows.forEach((row, index) => {
     const rowNum = index + 2; // +2 because index is 0-based and we skip header
@@ -76,74 +98,28 @@ function validateCSVData(rows: CSVStudentRow[]): {
       return;
     }
 
-    validCount++;
-  });
-
-  return { validCount, errors };
-}
-
-/**
- * Process CSV data and generate TOTP secrets
- * Only called during actual import
- */
-function processCSVData(rows: CSVStudentRow[]): {
-  valid: ProcessedStudent[];
-  errors: string[];
-} {
-  const valid: ProcessedStudent[] = [];
-  const errors: string[] = [];
-  const seenSapIds = new Set<string>();
-
-  rows.forEach((row, index) => {
-    const rowNum = index + 2;
-
-    // Validate SAP ID
-    if (!row.sap_id || !row.sap_id.trim()) {
-      errors.push(`Row ${rowNum}: Missing SAP ID`);
-      return;
-    }
-
-    const sapId = row.sap_id.trim();
-
-    if (!isValidSapId(sapId)) {
-      errors.push(
-        `Row ${rowNum}: Invalid SAP ID format "${sapId}" (must be 8 digits)`
-      );
-      return;
-    }
-
-    if (seenSapIds.has(sapId)) {
-      errors.push(`Row ${rowNum}: Duplicate SAP ID "${sapId}" in CSV`);
-      return;
-    }
-    seenSapIds.add(sapId);
-
-    if (!row.full_name || row.full_name.trim().length < 2) {
-      errors.push(`Row ${rowNum}: Missing or invalid full name`);
-      return;
-    }
-
     // Process payment status
-    let paymentStatus = false;
+    let isPaid = false;
     if (row.payment_status !== undefined) {
       if (typeof row.payment_status === "boolean") {
-        paymentStatus = row.payment_status;
+        isPaid = row.payment_status;
       } else {
         const statusStr = row.payment_status.toString().toLowerCase().trim();
-        paymentStatus = ["true", "yes", "1", "paid"].includes(statusStr);
+        isPaid = ["true", "yes", "1", "paid"].includes(statusStr);
       }
     }
 
-    // Generate TOTP secret ONLY during actual import
-    const totpSecret = generateTotpSecret();
+    // Generate activation token
+    const activationToken = generateToken();
 
     valid.push({
-      sap_id: sapId,
-      // Sanitize full name to prevent XSS
-      full_name: row.full_name.trim().replace(/[<>]/g, ""),
-      email: row.email?.trim() || `${sapId}@student.university.edu`,
-      payment_status: paymentStatus,
-      totp_secret: totpSecret,
+      sapId,
+      fullName: sanitizeName(row.full_name),
+      email: row.email?.trim() || `${sapId}@student.sentinel.edu`,
+      isPaid,
+      activationToken,
+      section: row.section?.trim(),
+      semester: row.semester?.trim(),
     });
   });
 
@@ -152,7 +128,8 @@ function processCSVData(rows: CSVStudentRow[]): {
 
 /**
  * Server Action: Import multiple students from CSV
- * SECURED: Requires admin authentication
+ * SECURED: Requires SUPER_ADMIN authentication
+ * FIXED: Actually persists data to database
  */
 export async function importStudents(
   csvRows: CSVStudentRow[]
@@ -161,10 +138,10 @@ export async function importStudents(
     // ============================================
     // AUTHORIZATION CHECK
     // ============================================
-    await requireAdmin();
+    const admin = await requireSuperAdmin();
 
     // ============================================
-    // RATE LIMITING CHECK
+    // INPUT VALIDATION
     // ============================================
     if (!csvRows || csvRows.length === 0) {
       return {
@@ -188,7 +165,7 @@ export async function importStudents(
       };
     }
 
-    // Process and validate the data (with TOTP generation)
+    // Process and validate the data
     const { valid, errors } = processCSVData(csvRows);
 
     if (valid.length === 0) {
@@ -201,24 +178,20 @@ export async function importStudents(
       };
     }
 
-    const supabase = await createClient();
-
     // ============================================
     // CHECK FOR EXISTING SAP IDs
     // ============================================
-    const sapIds = valid.map((s) => s.sap_id);
-    const { data: existingProfiles } = (await supabase
-      .from("profiles")
-      .select("sap_id")
-      .in("sap_id", sapIds)) as { data: { sap_id: string }[] | null };
+    const sapIds = valid.map((s) => s.sapId);
+    const existingUsers = await prisma.user.findMany({
+      where: { sapId: { in: sapIds } },
+      select: { sapId: true },
+    });
 
-    const existingSapIds = new Set(
-      existingProfiles?.map((p) => p.sap_id) || []
-    );
+    const existingSapIds = new Set(existingUsers.map((u) => u.sapId));
 
     const toInsert = valid.filter((s) => {
-      if (existingSapIds.has(s.sap_id)) {
-        errors.push(`SAP ID ${s.sap_id} already exists in database`);
+      if (existingSapIds.has(s.sapId)) {
+        errors.push(`SAP ID ${s.sapId} already exists in database`);
         return false;
       }
       return true;
@@ -235,36 +208,82 @@ export async function importStudents(
     }
 
     // ============================================
-    // BATCH INSERT
+    // CREATE USERS (Supabase Auth + Prisma)
     // ============================================
-    // TODO: In production, create auth users first, then update profiles
-    // For now, we simulate the insert
+    const supabaseAdmin = createAdminClient();
+    let successCount = 0;
 
-    // Example Supabase insert:
-    // const { error: insertError } = await supabase
-    //   .from("profiles")
-    //   .insert(toInsert.map(s => ({
-    //     id: crypto.randomUUID(), // In production, this comes from auth
-    //     sap_id: s.sap_id,
-    //     full_name: s.full_name,
-    //     totp_secret: s.totp_secret,
-    //     payment_status: s.payment_status,
-    //     role: "student",
-    //   })));
-    //
-    // if (insertError) throw insertError;
+    for (const student of toInsert) {
+      try {
+        // 1. Create Supabase Auth user
+        const { data: authUser, error: authError } =
+          await supabaseAdmin.auth.admin.createUser({
+            email: student.email,
+            password: student.activationToken, // Token is initial password
+            email_confirm: true,
+            user_metadata: {
+              sapId: student.sapId,
+              role: "STUDENT",
+            },
+          });
 
-    // Simulate processing delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (authError || !authUser.user) {
+          errors.push(
+            `${student.sapId}: Auth creation failed - ${authError?.message}`
+          );
+          continue;
+        }
+
+        // 2. Create Prisma User record
+        try {
+          await prisma.user.create({
+            data: {
+              id: authUser.user.id,
+              sapId: student.sapId,
+              fullName: student.fullName,
+              role: "STUDENT",
+              isPaid: student.isPaid,
+              isActive: true,
+              activationToken: student.activationToken,
+              section: student.section || null,
+              semester: student.semester || null,
+              createdById: admin.id,
+            },
+          });
+          successCount++;
+        } catch (dbError) {
+          // Rollback: Delete auth user if DB insert fails
+          await supabaseAdmin.auth.admin.deleteUser(authUser.user.id);
+          errors.push(`${student.sapId}: Database insert failed`);
+        }
+      } catch (err) {
+        errors.push(
+          `${student.sapId}: ${
+            err instanceof Error ? err.message : "Unknown error"
+          }`
+        );
+      }
+    }
+
+    // ============================================
+    // LOG THE IMPORT
+    // ============================================
+    await prisma.auditLog.create({
+      data: {
+        performerId: admin.id,
+        action: "BULK_IMPORT",
+        details: `Imported ${successCount} students from CSV. Failed: ${errors.length}`,
+      },
+    });
 
     revalidatePath("/admin/students");
 
     return {
-      success: true,
-      message: `Successfully imported ${toInsert.length} students`,
-      imported: toInsert.length,
+      success: successCount > 0,
+      message: `Successfully imported ${successCount} students`,
+      imported: successCount,
       failed: errors.length,
-      errors: errors.slice(0, 10),
+      errors: errors.slice(0, 20), // Limit errors returned
     };
   } catch (error) {
     console.error("Bulk import error:", error);
@@ -291,7 +310,7 @@ export async function importStudents(
 
 /**
  * Server Action: Validate CSV without importing
- * SECURED: Requires admin authentication
+ * SECURED: Requires SUPER_ADMIN authentication
  */
 export async function validateCSV(csvRows: CSVStudentRow[]): Promise<{
   valid: number;
@@ -300,7 +319,7 @@ export async function validateCSV(csvRows: CSVStudentRow[]): Promise<{
 }> {
   try {
     // Authorization check
-    await requireAdmin();
+    await requireSuperAdmin();
 
     // Rate limit check
     if (csvRows.length > MAX_IMPORT_ROWS) {
@@ -312,12 +331,24 @@ export async function validateCSV(csvRows: CSVStudentRow[]): Promise<{
     }
 
     // Validate without generating secrets
-    const { validCount, errors } = validateCSVData(csvRows);
+    const { valid, errors } = processCSVData(csvRows);
+
+    // Check for existing SAP IDs
+    const sapIds = valid.map((s) => s.sapId);
+    const existingUsers = await prisma.user.findMany({
+      where: { sapId: { in: sapIds } },
+      select: { sapId: true },
+    });
+
+    const existingSapIds = new Set(existingUsers.map((u) => u.sapId));
+    const additionalErrors = [...existingSapIds].map(
+      (id) => `SAP ID ${id} already exists`
+    );
 
     return {
-      valid: validCount,
-      invalid: errors.length,
-      errors: errors.slice(0, 20),
+      valid: valid.length - existingSapIds.size,
+      invalid: errors.length + existingSapIds.size,
+      errors: [...errors, ...additionalErrors].slice(0, 20),
     };
   } catch (error) {
     if (error instanceof Error && error.message.includes("required")) {

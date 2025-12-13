@@ -28,22 +28,12 @@ interface PageProps {
 // AUTH CHECK
 // ============================================
 
+import { requireSuperAdmin } from "@/lib/auth";
+
+// ... imports ...
+
 async function verifyAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user: supabaseUser },
-  } = await supabase.auth.getUser();
-
-  if (!supabaseUser) redirect("/login");
-
-  const dbUser = await prisma.user.findUnique({
-    where: { id: supabaseUser.id },
-    select: { role: true },
-  });
-
-  if (!dbUser || dbUser.role !== "SUPER_ADMIN") {
-    redirect("/unauthorized");
-  }
+  await requireSuperAdmin();
 }
 
 // ============================================

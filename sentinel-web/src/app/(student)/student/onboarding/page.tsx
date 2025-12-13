@@ -37,7 +37,10 @@ export default function OnboardingPage() {
 
       const compressedFile = await imageCompression(file, options);
       const supabase = createClient();
-      const fileName = `${Date.now()}-${file.name.split(".")[0]}.webp`;
+
+      // SECURITY FIX: Add random UUID to prevent filename collisions
+      const randomId = crypto.randomUUID();
+      const fileName = `${randomId}-${Date.now()}.webp`;
 
       const { data, error } = await supabase.storage
         .from(bucket)

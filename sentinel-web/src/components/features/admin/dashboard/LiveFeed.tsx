@@ -32,13 +32,20 @@ export function LiveFeed() {
           event: "INSERT",
           schema: "public",
           table: "access_logs",
+          filter: "status=in.(GRANTED,REJECTED,DUPLICATE)", // Filter to reduce noise
         },
         (payload) => {
           const newLog = payload.new as LogEntry;
           setLogs((prev) => [newLog, ...prev].slice(0, 10)); // Keep last 10
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          console.log("LiveFeed connected");
+        } else if (status === "CHANNEL_ERROR") {
+          console.error("LiveFeed connection error - check RLS policies");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

@@ -52,6 +52,10 @@ const CACHE_TAGS = {
 
 const getCachedManagers = unstable_cache(
   async () => {
+    // SECURITY FIX: Get dynamic ticket price instead of hardcoding
+    const { getTicketPrice } = await import("@/actions/settings-actions");
+    const ticketPrice = await getTicketPrice();
+
     const managers = await prisma.user.findMany({
       where: {
         role: {
@@ -77,10 +81,10 @@ const getCachedManagers = unstable_cache(
       },
     });
 
-    // Calculate cash liability (Rs. 2000 per student created)
+    // Calculate cash liability with dynamic price
     return managers.map((manager) => ({
       ...manager,
-      cashLiability: manager._count.createdUsers * 2000,
+      cashLiability: manager._count.createdUsers * ticketPrice,
     }));
   },
   [CACHE_TAGS.managers],
@@ -139,10 +143,14 @@ export async function getManagerById(
 
   if (!manager) return null;
 
+  // Use dynamic ticket price
+  const { getTicketPrice } = await import("@/actions/settings-actions");
+  const ticketPrice = await getTicketPrice();
+
   return {
     ...manager,
     studentsCount: manager._count.createdUsers,
-    cashCollected: manager._count.createdUsers * 2000,
+    cashCollected: manager._count.createdUsers * ticketPrice,
   };
 }
 
@@ -200,9 +208,13 @@ export async function getManagerStats(
     }),
   ]);
 
+  // Use dynamic ticket price
+  const { getTicketPrice } = await import("@/actions/settings-actions");
+  const ticketPrice = await getTicketPrice();
+
   return {
     studentsRegistered: students.length,
-    cashCollected: students.length * 2000,
+    cashCollected: students.length * ticketPrice,
     recentStudents: students,
     auditLogs,
   };
@@ -282,10 +294,6 @@ export async function updateManager(
 // CREATE MANAGER (CR/GR)
 // ============================================
 
-// ============================================
-// CREATE MANAGER (CR/GR)
-// ============================================
-
 export async function createManager(
   input: CreateManagerInput
 ): Promise<ActionResult> {
@@ -342,7 +350,7 @@ export async function createManager(
         ) ||
         authError.code === "email_exists"
       ) {
-        console.log("Email exists in Supabase, checking for orphan record...");
+        // Orphan record found - email exists in Auth but not in Prisma
 
         // Fetch the existing user from Supabase
         const { data: existingAuthUser, error: fetchError } =

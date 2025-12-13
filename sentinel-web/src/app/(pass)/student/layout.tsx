@@ -1,5 +1,3 @@
-import { Toaster } from "@/components/ui/sonner";
-
 export const metadata = {
   title: "Sentinel Pass",
   description: "Your university access pass",
@@ -28,7 +26,6 @@ export default function StudentLayout({
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
       {children}
-      <Toaster />
     </div>
   );
 }

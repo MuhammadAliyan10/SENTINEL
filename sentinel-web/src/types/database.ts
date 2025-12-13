@@ -198,6 +198,8 @@ export interface CSVStudentRow {
   full_name: string;
   email?: string;
   payment_status?: string | boolean;
+  section?: string;
+  semester?: string;
 }
 
 /**

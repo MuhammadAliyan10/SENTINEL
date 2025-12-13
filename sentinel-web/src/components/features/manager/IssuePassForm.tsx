@@ -176,7 +176,7 @@ export function IssuePassForm() {
                         <FormLabel>SAP ID</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Ticket className="absolute left-3 top-5 h-4 w-4 text-muted-foreground" />
+                            <Ticket className="absolute left-3 top-4 h-4 w-4 text-muted-foreground" />
                             <Input
                               placeholder="e.g. 70168915"
                               className="pl-9 text-lg h-12"
@@ -194,7 +194,7 @@ export function IssuePassForm() {
                   />
                   <Button
                     type="submit"
-                    className="w-full h-12 text-lg"
+                    className="w-full h-12 text-md"
                     disabled={form.formState.isSubmitting}
                   >
                     {form.formState.isSubmitting ? (

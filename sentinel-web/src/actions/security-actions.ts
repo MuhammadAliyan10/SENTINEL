@@ -1,92 +1,29 @@
 "use server";
 
-import { authenticator } from "otplib";
-import { createClient, requireAuth } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
+import { createHmac } from "crypto";
 
-// Configure TOTP authenticator
-authenticator.options = {
-  digits: 6,
-  step: 30,
-  window: 1,
-};
-
-export interface TOTPResult {
-  success: boolean;
-  code?: string;
-  expiresIn?: number;
-  message?: string;
-}
-
-/**
- * Server Action: Generate a real TOTP code for the authenticated user
- * This uses the user's actual totp_secret stored in the database
- * SECURITY: The secret is NEVER returned to the client
- */
-export async function generateTimeToken(): Promise<TOTPResult> {
-  try {
-    // Require authentication
-    const { userId } = await requireAuth();
-
-    // Get the user's TOTP secret (only accessible server-side)
-    const supabase = await createClient();
-    const { data: profile, error } = (await supabase
-      .from("profiles")
-      .select("totp_secret, payment_status")
-      .eq("id", userId)
-      .single()) as {
-      data: { totp_secret: string; payment_status: boolean } | null;
-      error: unknown;
-    };
-
-    if (error || !profile) {
-      return {
-        success: false,
-        message: "Profile not found",
-      };
-    }
-
-    // Check payment status
-    if (!profile.payment_status) {
-      return {
-        success: false,
-        message: "Payment required to generate access code",
-      };
-    }
-
-    // Generate the TOTP code using the secret
-    const code = authenticator.generate(profile.totp_secret);
-
-    // Calculate time until expiration
-    const now = Math.floor(Date.now() / 1000);
-    const expiresIn = 30 - (now % 30);
-
-    return {
-      success: true,
-      code,
-      expiresIn,
-    };
-  } catch (error) {
-    console.error("Error generating TOTP:", error);
-    return {
-      success: false,
-      message:
-        error instanceof Error ? error.message : "Failed to generate code",
-    };
-  }
-}
-
-/**
- * Server Action: Verify a TOTP code for a specific user
- * Used by guards to validate student entry
- */
-export async function verifyTimeToken(
-  sapId: string,
-  code: string
-): Promise<{
+export interface QRVerifyResult {
   valid: boolean;
   message: string;
-  profile?: { full_name: string; sap_id: string; payment_status: boolean };
-}> {
+  profile?: {
+    fullName: string;
+    sapId: string;
+    isPaid: boolean;
+  };
+}
+
+/**
+ * Server Action: Verify a QR code for a specific user
+ * Used by guards to validate student entry
+ * SECURITY: Uses Prisma User table (not legacy profiles)
+ */
+export async function verifyQRCode(
+  sapId: string,
+  timestamp: string,
+  signature: string
+): Promise<QRVerifyResult> {
   try {
     const supabase = await createClient();
     const {
@@ -100,76 +37,123 @@ export async function verifyTimeToken(
       };
     }
 
-    // Check if user is admin or guard
-    const { data: verifierProfile } = (await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()) as { data: { role: string } | null };
+    // SECURITY: Check if user is SUPER_ADMIN or GUARD using Prisma
+    const verifier = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { role: true, isActive: true },
+    });
 
-    if (
-      !verifierProfile ||
-      !["admin", "guard"].includes(verifierProfile.role)
-    ) {
+    if (!verifier || !verifier.isActive) {
+      return {
+        valid: false,
+        message: "Your account is inactive",
+      };
+    }
+
+    if (!["SUPER_ADMIN", "GUARD"].includes(verifier.role)) {
       return {
         valid: false,
         message: "Unauthorized: Guard or Admin access required",
       };
     }
 
-    // Find the user by SAP ID
-    const { data: profile, error } = (await supabase
-      .from("profiles")
-      .select("id, full_name, sap_id, totp_secret, payment_status")
-      .eq("sap_id", sapId)
-      .single()) as {
-      data: {
-        id: string;
-        full_name: string;
-        sap_id: string;
-        totp_secret: string;
-        payment_status: boolean;
-      } | null;
-      error: unknown;
-    };
+    // Find the student by SAP ID using Prisma
+    const student = await prisma.user.findUnique({
+      where: { sapId },
+      select: {
+        id: true,
+        fullName: true,
+        sapId: true,
+        activationToken: true,
+        isPaid: true,
+        isActive: true,
+        role: true,
+      },
+    });
 
-    if (error || !profile) {
+    if (!student) {
       return {
         valid: false,
         message: "Student not found",
       };
     }
 
-    // Check payment status
-    if (!profile.payment_status) {
+    if (student.role !== "STUDENT") {
       return {
         valid: false,
-        message: "Payment pending - access denied",
+        message: "This is not a student account",
+      };
+    }
+
+    if (!student.isActive) {
+      return {
+        valid: false,
+        message: "Student access is revoked",
         profile: {
-          full_name: profile.full_name,
-          sap_id: profile.sap_id,
-          payment_status: false,
+          fullName: student.fullName || "Unknown",
+          sapId: student.sapId,
+          isPaid: student.isPaid,
         },
       };
     }
 
-    // Verify the TOTP code
-    const isValid = authenticator.verify({
-      token: code,
-      secret: profile.totp_secret,
-    });
+    // Check payment status
+    if (!student.isPaid) {
+      return {
+        valid: false,
+        message: "Payment pending - access denied",
+        profile: {
+          fullName: student.fullName || "Unknown",
+          sapId: student.sapId,
+          isPaid: false,
+        },
+      };
+    }
+
+    // Verify QR signature using activation token (HMAC-SHA256)
+    if (!student.activationToken) {
+      return {
+        valid: false,
+        message: "Student has no activation token",
+      };
+    }
+
+    // Check timestamp freshness (QR valid for 5 minutes)
+    const qrTimestamp = parseInt(timestamp, 10);
+    const now = Date.now();
+    const maxAge = 5 * 60 * 1000; // 5 minutes
+
+    if (isNaN(qrTimestamp) || now - qrTimestamp > maxAge) {
+      return {
+        valid: false,
+        message: "QR code expired - ask student to refresh",
+        profile: {
+          fullName: student.fullName || "Unknown",
+          sapId: student.sapId,
+          isPaid: student.isPaid,
+        },
+      };
+    }
+
+    // Verify HMAC signature
+    const payloadString = `${sapId}:${timestamp}`;
+    const expectedSignature = createHmac("sha256", student.activationToken)
+      .update(payloadString)
+      .digest("hex");
+
+    const isValid = signature === expectedSignature;
 
     return {
       valid: isValid,
-      message: isValid ? "Access granted" : "Invalid code",
+      message: isValid ? "Access granted" : "Invalid QR code",
       profile: {
-        full_name: profile.full_name,
-        sap_id: profile.sap_id,
-        payment_status: profile.payment_status,
+        fullName: student.fullName || "Unknown",
+        sapId: student.sapId,
+        isPaid: student.isPaid,
       },
     };
   } catch (error) {
-    console.error("Error verifying TOTP:", error);
+    console.error("Error verifying QR code:", error);
     return {
       valid: false,
       message: error instanceof Error ? error.message : "Verification failed",
@@ -178,15 +162,90 @@ export async function verifyTimeToken(
 }
 
 /**
- * Get the current TOTP window info (for UI display)
+ * Log an access attempt (entry/exit)
+ * SECURITY: Requires GUARD or SUPER_ADMIN role
  */
-export async function getTOTPWindow(): Promise<{
+export async function logAccessAttempt(
+  studentId: string,
+  type: "ENTRY" | "EXIT",
+  status: "GRANTED" | "REJECTED" | "DUPLICATE",
+  gateNumber?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, message: "Authentication required" };
+    }
+
+    // Verify scanner is authorized
+    const scanner = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { role: true, isActive: true },
+    });
+
+    if (
+      !scanner ||
+      !scanner.isActive ||
+      !["SUPER_ADMIN", "GUARD"].includes(scanner.role)
+    ) {
+      return { success: false, message: "Unauthorized" };
+    }
+
+    // Check for duplicate scan (passback prevention)
+    if (type === "ENTRY" && status === "GRANTED") {
+      const lastLog = await prisma.accessLog.findFirst({
+        where: { userId: studentId },
+        orderBy: { timestamp: "desc" },
+      });
+
+      if (lastLog && lastLog.type === "ENTRY") {
+        // Already inside, this is a passback attempt
+        status = "DUPLICATE";
+      }
+    }
+
+    // Create access log
+    await prisma.accessLog.create({
+      data: {
+        userId: studentId,
+        scannerId: user.id,
+        type,
+        status,
+        gateNumber: gateNumber || null,
+      },
+    });
+
+    return {
+      success: true,
+      message:
+        status === "DUPLICATE"
+          ? "Passback detected"
+          : `${type} logged successfully`,
+    };
+  } catch (error) {
+    console.error("Error logging access:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to log access",
+    };
+  }
+}
+
+/**
+ * Get the current time window info (for UI display)
+ */
+export async function getTimeWindow(): Promise<{
   step: number;
   remaining: number;
 }> {
+  // QR codes refresh every 15 seconds for optimal security
   const now = Math.floor(Date.now() / 1000);
   return {
-    step: 30,
-    remaining: 30 - (now % 30),
+    step: 15,
+    remaining: 15 - (now % 15),
   };
 }

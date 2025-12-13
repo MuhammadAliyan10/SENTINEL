@@ -82,7 +82,9 @@ export async function createUser(
     // ============================================
     // STEP A: Create user in Supabase Auth
     // ============================================
-    const tempPassword = `SENTINEL_${input.sapId}_${Date.now()}`;
+    // SECURITY FIX: Use cryptographically secure random password
+    const { randomBytes } = await import("crypto");
+    const tempPassword = randomBytes(16).toString("hex");
 
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -270,13 +272,13 @@ export async function deleteUser(
       // User is already deleted from Prisma, log the issue
     }
 
-    // Log the action
+    // Log the action (use saved userId since user record is deleted)
     await prisma.auditLog.create({
       data: {
         action: "USER_DELETED",
         performerId: admin.id,
-        targetId: null, // User no longer exists
-        details: `Deleted user ${user.fullName} (${user.sapId})`,
+        targetId: userId, // Keep the original ID for audit trail
+        details: `Deleted ${user.role}: ${user.fullName} (${user.sapId})`,
       },
     });
 

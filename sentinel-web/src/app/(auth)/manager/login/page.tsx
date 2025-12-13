@@ -1,22 +1,41 @@
 "use client";
 
 import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Users, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { getUserRole } from "@/actions/auth-actions";
+import {
+  getUserRole,
+  logSuccessfulLogin,
+  logFailedLogin,
+} from "@/actions/auth-actions";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { AuthCard } from "@/components/auth/AuthCard";
 
+// SECURITY: Validate redirect path to prevent open redirect attacks
+function validateRedirectPath(path: string | null): string {
+  const defaultPath = "/manager/dashboard";
+  if (!path) return defaultPath;
+  // Must start with /manager and not contain protocol or double slashes
+  if (
+    !path.startsWith("/manager") ||
+    path.startsWith("//") ||
+    path.includes(":")
+  ) {
+    return defaultPath;
+  }
+  return path;
+}
+
 function ManagerLoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectPath = searchParams.get("redirect") || "/manager/dashboard";
+  const redirectPath = validateRedirectPath(searchParams.get("redirect"));
 
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
@@ -30,6 +49,18 @@ function ManagerLoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Client-side validation
+    if (!email || !email.includes("@")) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -40,22 +71,34 @@ function ManagerLoginForm() {
           password,
         });
 
-      if (authError) throw new Error(authError.message);
-      if (!authData.user) throw new Error("Authentication failed");
+      if (authError) {
+        await logFailedLogin(email, authError.message);
+        throw new Error(authError.message);
+      }
 
-      // Role Check
-      const role = await getUserRole();
+      if (!authData.user) {
+        await logFailedLogin(email, "No user returned");
+        throw new Error("Authentication failed");
+      }
+
+      // Role Check - allow CR or GR
+      const role = authData.user.user_metadata?.role;
       if (role !== "CR" && role !== "GR") {
         await supabase.auth.signOut();
-        throw new Error("Unauthorized: Access Restricted to Staff");
+        await logFailedLogin(email, "Unauthorized role: " + role);
+        throw new Error("Access Denied: Manager privileges required");
       }
+
+      // Log successful login
+      await logSuccessfulLogin(authData.user.id, role);
 
       toast.success("Welcome, Manager");
       // Use full page reload to ensure session is recognized
       window.location.href = redirectPath;
     } catch (err) {
-      console.error("Login error:", err);
-      setError(err instanceof Error ? err.message : "Failed to sign in");
+      const message = err instanceof Error ? err.message : "Failed to sign in";
+      setError(message);
+      toast.error(message);
       setIsLoading(false);
     }
   };
@@ -85,7 +128,7 @@ function ManagerLoginForm() {
               id="email"
               type="email"
               placeholder="manager@sentinel.edu"
-              autoComplete="off"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -94,10 +137,9 @@ function ManagerLoginForm() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
-              autoComplete="off"
+              autoComplete="current-password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

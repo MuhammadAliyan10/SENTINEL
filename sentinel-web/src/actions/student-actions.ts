@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createHmac } from "crypto";
 import { z } from "zod";
 
 const profileSchema = z.object({
@@ -24,6 +26,18 @@ export async function completeProfile(formData: FormData) {
 
   if (!user) {
     return { error: "Unauthorized" };
+  }
+
+  // SECURITY: Check if profile is already completed (Locking)
+  const existingUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { profileCompleted: true },
+  });
+
+  if (existingUser?.profileCompleted) {
+    return {
+      error: "Profile is already completed. Contact admin for changes.",
+    };
   }
 
   const rawData = {
@@ -66,11 +80,11 @@ export async function completeProfile(formData: FormData) {
   redirect("/student/dashboard");
 }
 
-import { revalidatePath } from "next/cache";
-import { createHmac } from "crypto";
-
-// ... existing imports
-
+/**
+ * Get ticket data for student dashboard
+ * SECURITY FIX: Uses activationToken for QR signing (not service role key)
+ * SECURITY FIX: Does NOT return activationToken to client
+ */
 export async function getTicketData() {
   const supabase = await createClient();
   const {
@@ -93,7 +107,7 @@ export async function getTicketData() {
       department: true,
       phoneNumber: true,
       cnic: true,
-      activationToken: true,
+      activationToken: true, // Needed for QR signing (server-side only)
       profileCompleted: true,
       isActive: true,
       isPaid: true,
@@ -110,15 +124,32 @@ export async function getTicketData() {
   if (!dbUser) redirect("/login");
   if (!dbUser.profileCompleted) redirect("/student/onboarding");
 
-  // Generate QR Payload
+  // SECURITY FIX: Generate QR using activationToken (not service role key)
+  // QR format is consistent with DigitalPass component
   const timestamp = Date.now();
-  const payload = `${user.id}:${timestamp}`;
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || "fallback-secret";
-  const signature = createHmac("sha256", secret).update(payload).digest("hex");
-  const qrCode = `${payload}:${signature}`;
+  const payloadString = `${dbUser.sapId}:${timestamp}`;
+
+  // Use activation token as HMAC secret (consistent with security-actions.ts verification)
+  const secret = dbUser.activationToken;
+  if (!secret) {
+    throw new Error("User has no activation token");
+  }
+
+  const signature = createHmac("sha256", secret)
+    .update(payloadString)
+    .digest("hex");
+
+  const qrCode = JSON.stringify({
+    sap: dbUser.sapId,
+    ts: timestamp,
+    sig: signature,
+  });
+
+  // SECURITY: Return user data WITHOUT activationToken
+  const { activationToken: _, ...safeUser } = dbUser;
 
   return {
-    user: dbUser,
+    user: safeUser,
     qrCode,
     timestamp,
   };

@@ -5,6 +5,7 @@ import {
   revokeStudentAccess,
   restoreStudentAccess,
   manualPaymentOverride,
+  manualCheckIn,
 } from "@/actions/students-actions";
 import {
   Card,
@@ -49,6 +50,7 @@ import {
   CalendarDays,
   DollarSign,
   Loader2,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -141,6 +143,17 @@ export function StudentProfile({ student }: StudentProfileProps) {
     });
   };
 
+  const handleManualCheckIn = () => {
+    startTransition(async () => {
+      const result = await manualCheckIn(student.id);
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    });
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "GRANTED":
@@ -216,7 +229,24 @@ export function StudentProfile({ student }: StudentProfileProps) {
             </div>
 
             {/* Emergency Action Buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {/* Manual Check-In Button */}
+              {student.isActive && (
+                <Button
+                  variant="outline"
+                  className="gap-2 border-emerald-600 text-emerald-600 hover:bg-emerald-600 hover:text-white"
+                  onClick={handleManualCheckIn}
+                  disabled={isPending}
+                >
+                  {isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UserCheck className="h-4 w-4" />
+                  )}
+                  Manual Check-In
+                </Button>
+              )}
+
               {/* Manual Payment Button */}
               {!student.isPaid && (
                 <Button

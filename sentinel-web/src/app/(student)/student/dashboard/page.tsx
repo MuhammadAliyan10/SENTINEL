@@ -14,7 +14,7 @@ interface TicketData {
     profilePhotoUrl: string | null;
     gender: "MALE" | "FEMALE" | "OTHER" | null;
     section: string | null;
-    activationToken: string | null;
+    // SECURITY: activationToken is no longer in client response
   };
   qrCode: string;
   timestamp: number;
@@ -28,7 +28,7 @@ export default function StudentDashboard() {
     try {
       const res = await getTicketData();
       if (res) {
-        // @ts-ignore
+        // @ts-ignore - type differences in server action
         setData(res);
         localStorage.setItem("cachedTicket", JSON.stringify(res));
       }
@@ -62,5 +62,11 @@ export default function StudentDashboard() {
 
   if (!data) return null;
 
-  return <DigitalPass user={data.user} />;
+  // Transform data to match DigitalPass props
+  const initialQrData = {
+    payload: data.qrCode,
+    expiresAt: data.timestamp + 5 * 60 * 1000, // 5 minutes
+  };
+
+  return <DigitalPass user={data.user} initialQrData={initialQrData} />;
 }

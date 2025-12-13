@@ -119,6 +119,35 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // ============================================
+  // CSRF PROTECTION (API Routes)
+  // ============================================
+  if (
+    pathname.startsWith("/api") &&
+    request.method !== "GET" &&
+    request.method !== "HEAD"
+  ) {
+    const origin = request.headers.get("origin");
+    const host = request.headers.get("host");
+    const referer = request.headers.get("referer");
+
+    // Allow requests from same origin
+    if (origin && host && !origin.includes(host)) {
+      return new NextResponse(JSON.stringify({ error: "Invalid Origin" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // If no origin (some clients), check referer
+    if (!origin && referer && host && !referer.includes(host)) {
+      return new NextResponse(JSON.stringify({ error: "Invalid Referer" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
   return supabaseResponse;
 }
 
@@ -130,8 +159,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico
      * - public files (icons, manifest, etc.)
-     * - api routes that handle their own auth
+     * - api routes are NOW included for CSRF check
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|offline|api).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|offline).*)",
   ],
 };

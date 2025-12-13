@@ -163,6 +163,8 @@ function StudentLoginForm() {
                   value={token}
                   pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
                   onChange={(value) => setToken(value.toUpperCase())}
+                  inputMode="text"
+                  autoCapitalize="characters"
                 >
                   <InputOTPGroup className="gap-2">
                     {[0, 1, 2, 3, 4, 5].map((index) => (

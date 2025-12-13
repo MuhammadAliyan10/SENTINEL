@@ -30,7 +30,7 @@ export function AuthCard({
         className
       )}
     >
-      <CardHeader className="text-center space-y-2 pb-6">
+      <CardHeader className="text-center space-y-2 pb-4">
         {icon && (
           <div className="mx-auto mb-2 flex items-center justify-center">
             {icon}

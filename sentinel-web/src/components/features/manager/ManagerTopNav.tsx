@@ -14,7 +14,7 @@ export function ManagerTopNav() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push("/manager/login");
   };
 
   const navItems = [

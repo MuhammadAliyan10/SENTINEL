@@ -122,6 +122,8 @@ export async function getTicketData() {
   });
 
   if (!dbUser) redirect("/login");
+  if (!dbUser.isActive) redirect("/unauthorized?reason=revoked");
+  if (!dbUser.isPaid) redirect("/student/payment-required");
   if (!dbUser.profileCompleted) redirect("/student/onboarding");
 
   // SECURITY FIX: Generate QR using activationToken (not service role key)

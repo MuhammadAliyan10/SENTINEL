@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { CardContainer, CardBody, CardItem } from "@/components/ui/3d-card";
 
 // ============================================
 // TYPES
@@ -245,7 +246,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
   // ----------------------------------------
   return (
     <div
-      className="h-screen flex flex-col items-center justify-center bg-gray-50 p-4 overflow-hidden"
+      className="min-h-[100dvh] flex flex-col items-center justify-center bg-gray-50 p-4 pb-24 overflow-hidden" // Added overflow-hidden
       onContextMenu={(e) => e.preventDefault()} // Disable Right Click
     >
       {/* SECURITY: Pulsing Background Animation */}
@@ -253,91 +254,114 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
         <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent animate-pulse-slow" />
       </div>
 
-      {/* Pass Card */}
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden z-10 relative border border-white/10">
-        {/* Live Header */}
-        {/* Offline Indicator (Non-blocking) */}
-        {isOffline && (
-          <div className="bg-yellow-50 p-3 border-b border-yellow-100 flex items-center justify-center gap-2 text-yellow-700 animate-in slide-in-from-top duration-300">
-            <WifiOff className="h-4 w-4" />
-            <span className="text-xs font-semibold">
-              Offline Mode • Using last valid code
-            </span>
-          </div>
-        )}
+      <CardContainer className="inter-var w-full max-w-sm">
+        <CardBody className="bg-gray-50 relative group/card  dark:hover:shadow-2xl dark:hover:shadow-emerald-500/[0.1] dark:bg-black dark:border-white/[0.2] border-black/[0.1] w-full h-auto rounded-xl p-6 border">
+          {/* Live Header */}
+          {/* Offline Indicator (Non-blocking) */}
+          {isOffline && (
+            <CardItem
+              translateZ="50"
+              className="w-full bg-yellow-50 p-3 border-b border-yellow-100 flex items-center justify-center gap-2 text-yellow-700 animate-in slide-in-from-top duration-300 rounded-t-xl"
+            >
+              <WifiOff className="h-4 w-4" />
+              <span className="text-xs font-semibold">
+                Offline Mode • Using last valid code
+              </span>
+            </CardItem>
+          )}
 
-        {/* User Info */}
-        <div className="p-6 pb-2 text-center bg-white">
-          <div className="relative w-24 h-24 mx-auto mb-3">
-            {user.profilePhotoUrl ? (
+          {/* User Info */}
+          <div className="p-6 pb-2 bg-white rounded-t-xl">
+            <CardItem
+              translateZ="50"
+              className="w-full flex justify-center mb-6 border-b border-slate-100 pb-4"
+            >
               <Image
-                src={user.profilePhotoUrl}
-                alt="Profile"
-                fill
-                className="rounded-full object-cover border-4 border-slate-100 shadow-sm"
+                src="/UniversityLogo.jpeg"
+                alt="University"
+                width={200}
+                height={100}
+                className="object-contain"
               />
-            ) : (
-              <div className="w-full h-full rounded-full bg-slate-200" />
-            )}
-            {/* Active Indicator */}
-            <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full animate-bounce" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-900 truncate">
-            {user.fullName}
-          </h2>
-          <p className="text-sm text-slate-500 font-mono mt-1">{user.sapId}</p>
-        </div>
+            </CardItem>
 
-        {/* QR Code Section */}
-        <div className="p-6 pt-2 bg-white flex flex-col items-center">
-          <div
-            className={cn(
-              "p-4 bg-white rounded-xl border-4 transition-all duration-300 shadow-inner",
-              isOffline ? "border-yellow-400" : "border-primary/20"
-            )}
-          >
-            <div className="relative">
-              <QRCodeSVG
-                value={qrPayload}
-                size={320}
-                level="H"
-                includeMargin={true}
-                className="rounded-lg"
-              />
-              {/* Holographic Overlay Effect (CSS) */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent opacity-0 animate-shimmer pointer-events-none" />
+            <div className="flex items-center gap-2">
+              <CardItem
+                translateZ="60"
+                className="relative w-20 h-20 flex-shrink-0"
+              >
+                {user.profilePhotoUrl ? (
+                  <Image
+                    src={user.profilePhotoUrl}
+                    alt="Profile"
+                    fill
+                    className="rounded-full object-cover border-4 border-slate-100 shadow-sm"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-slate-200" />
+                )}
+                {/* Active Indicator */}
+                <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full animate-bounce" />
+              </CardItem>
+
+              <CardItem
+                translateZ="50"
+                className="flex-1 min-w-0 text-left ml-4"
+              >
+                <h2 className="text-xl font-bold text-slate-900 truncate">
+                  {user.fullName}
+                </h2>
+                <p className="text-sm text-slate-500 font-mono mt-1">
+                  {user.sapId}
+                </p>
+              </CardItem>
             </div>
           </div>
 
-          {/* Status Text */}
-          <div className="mt-4 flex items-center gap-2">
-            {isRefreshing ? (
-              <span className="text-xs text-primary flex items-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Refreshing code...
-              </span>
-            ) : isOffline ? (
-              <span className="text-xs text-yellow-600 flex items-center gap-1 font-medium">
-                <WifiOff className="h-3 w-3" />
-                Offline • Auto-reconnects
-              </span>
-            ) : (
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                Live Code • Auto-updates
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+          {/* QR Code Section */}
+          <div className="py-4 bg-white flex flex-col items-center rounded-b-xl">
+            <CardItem
+              translateZ="100"
+              className={cn(
+                "p-4 bg-white rounded-xl border-4 transition-all duration-300 shadow-inner",
+                isOffline ? "border-yellow-400" : "border-primary/20"
+              )}
+            >
+              <div className="relative">
+                <QRCodeSVG
+                  value={qrPayload}
+                  size={320}
+                  level="H"
+                  includeMargin={true}
+                  className="rounded-lg"
+                />
+                {/* Holographic Overlay Effect (CSS) */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent opacity-0 animate-shimmer pointer-events-none" />
+              </div>
+            </CardItem>
 
-      {/* Background Date Watermark */}
-      {/* <div className="absolute bottom-8 text-slate-800/50 font-black text-6xl tracking-tighter pointer-events-none z-0">
-        {currentTime.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        })}
-      </div> */}
+            {/* Status Text */}
+            <CardItem translateZ="60" className="mt-4 flex items-center gap-2">
+              {isRefreshing ? (
+                <span className="text-xs text-primary flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Refreshing code...
+                </span>
+              ) : isOffline ? (
+                <span className="text-xs text-yellow-600 flex items-center gap-1 font-medium">
+                  <WifiOff className="h-3 w-3" />
+                  Offline • Auto-reconnects
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400 flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  Live Code • Auto-updates
+                </span>
+              )}
+            </CardItem>
+          </div>
+        </CardBody>
+      </CardContainer>
     </div>
   );
 }

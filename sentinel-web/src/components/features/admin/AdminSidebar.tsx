@@ -84,7 +84,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
     const supabase = createClient();
     await supabase.auth.signOut();
     // Force full reload to clear all cached state
-    window.location.href = "/login";
+    window.location.href = "/admin/login";
   };
 
   const getInitials = (name: string | null): string => {

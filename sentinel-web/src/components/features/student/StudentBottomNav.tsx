@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 export default function StudentBottomNav() {
   const pathname = usePathname();
+  console.log("StudentBottomNav rendering", pathname);
 
   const links = [
     {
@@ -21,8 +22,13 @@ export default function StudentBottomNav() {
     },
   ];
 
+  // DEBUG: Removed onboarding check
+  // if (pathname?.includes("/onboarding")) {
+  //   return null;
+  // }
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-16 flex items-center justify-around z-50">
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-16 flex items-center justify-around z-[9999] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
       {links.map((link) => {
         const Icon = link.icon;
         const isActive = pathname === link.href;

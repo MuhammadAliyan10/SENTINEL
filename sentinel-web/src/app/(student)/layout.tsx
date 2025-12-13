@@ -55,8 +55,8 @@ export default async function StudentLayout({
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <main className={isOnOnboarding ? "" : "pb-20"}>{children}</main>
-      {!isOnOnboarding && <StudentBottomNav />}
+      <main className="pb-20">{children}</main>
+      <StudentBottomNav />
     </div>
   );
 }

@@ -74,14 +74,27 @@ export function IssuePassForm() {
 
   const handleCopy = () => {
     if (!result) return;
-    const text = `Payment Received for SAP ID ${result.sapId}.\nToken: ${result.token}\nLogin: ${window.location.origin}/login`;
+    const text = `Payment Received for SAP ID ${result.sapId}.\nToken: ${result.token}\nLogin: https://sentineluol.vercel.app/login`;
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard");
   };
 
   const handleShare = () => {
     if (!result) return;
-    const message = `Payment Received for SAP ID ${result.sapId}.\nYour Token: *${result.token}*\n\nLogin at: ${window.location.origin}/login`;
+    const message = `🎓 *SENTINEL ACCESS PASS*
+
+Dear Student (${result.sapId}),
+
+Your university access pass has been generated.
+
+🔑 *Login Credentials:*
+• SAP ID: ${result.sapId}
+• Token: *${result.token}*
+
+🔗 *Login Here:*
+https://sentineluol.vercel.app/login
+
+_Please keep this token secure._`;
     const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
   };

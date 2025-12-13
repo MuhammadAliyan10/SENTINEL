@@ -1,6 +1,6 @@
 "use client";
 
-import { LedgerEntry } from "@/actions/manager-actions";
+import { LedgerEntry, deleteStudent } from "@/actions/manager-actions";
 import {
   Table,
   TableBody,
@@ -10,9 +10,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 interface LedgerListProps {
   entries: {
@@ -26,11 +45,27 @@ export function LedgerList({ entries }: LedgerListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentPage = parseInt(searchParams.get("page") || "1", 10);
+  const [isPending, startTransition] = useTransition();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handlePageChange = (newPage: number) => {
     const params = new URLSearchParams(searchParams);
     params.set("page", newPage.toString());
     router.push(`?${params.toString()}`);
+  };
+
+  const handleDelete = (studentId: string) => {
+    setDeletingId(studentId);
+    startTransition(async () => {
+      const result = await deleteStudent(studentId);
+      if (result.success) {
+        toast.success(result.message);
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
+      setDeletingId(null);
+    });
   };
 
   if (entries.data.length === 0) {
@@ -58,6 +93,7 @@ export function LedgerList({ entries }: LedgerListProps) {
             <TableRow>
               <TableHead>SAP ID</TableHead>
               <TableHead className="text-right">Time</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -76,6 +112,42 @@ export function LedgerList({ entries }: LedgerListProps) {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
+                </TableCell>
+                <TableCell>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        disabled={isPending && deletingId === entry.id}
+                      >
+                        {isPending && deletingId === entry.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Student</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete student {entry.sapId}?
+                          This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDelete(entry.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </TableCell>
               </TableRow>
             ))}

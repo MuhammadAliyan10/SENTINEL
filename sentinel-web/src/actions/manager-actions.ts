@@ -312,3 +312,99 @@ export async function issuePass(sapId: string): Promise<IssuePassResult> {
     };
   }
 }
+
+/**
+ * Delete a student account.
+ * SECURITY: Only the manager who created the student can delete them.
+ */
+export async function deleteStudent(
+  studentId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const managerId = await getManagerId();
+
+    if (!studentId) {
+      return { success: false, message: "Student ID is required" };
+    }
+
+    // Verify student exists and was created by this manager
+    const student = await prisma.user.findUnique({
+      where: { id: studentId },
+      select: {
+        id: true,
+        sapId: true,
+        fullName: true,
+        createdById: true,
+        role: true,
+      },
+    });
+
+    if (!student) {
+      return { success: false, message: "Student not found" };
+    }
+
+    if (student.role !== "STUDENT") {
+      return { success: false, message: "User is not a student" };
+    }
+
+    if (student.createdById !== managerId) {
+      return {
+        success: false,
+        message: "You can only delete students you created",
+      };
+    }
+
+    // Delete from Supabase Auth
+    const supabaseAdmin = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+
+    // Delete from Prisma first
+    await prisma.user.delete({
+      where: { id: studentId },
+    });
+
+    // Delete from Supabase Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
+      studentId
+    );
+
+    if (authError) {
+      console.error("Failed to delete from Supabase Auth:", authError);
+      // Don't return error since Prisma deletion succeeded
+    }
+
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        performerId: managerId,
+        action: "DELETE_STUDENT",
+        targetId: studentId,
+        details: `Deleted student ${student.sapId} (${
+          student.fullName || "Unknown"
+        })`,
+      },
+    });
+
+    revalidatePath("/manager/dashboard");
+
+    return {
+      success: true,
+      message: `Student ${student.sapId} deleted successfully`,
+    };
+  } catch (error) {
+    console.error("Delete Student Error:", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Failed to delete student",
+    };
+  }
+}

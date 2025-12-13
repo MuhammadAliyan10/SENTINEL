@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Shield, Users, Smartphone } from "lucide-react";
+import { Shield, Users, Ticket, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,6 +11,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { AuthLayout } from "@/components/auth/AuthLayout";
 
 export default async function HomePage() {
   // Check for existing session and redirect if found
@@ -39,73 +40,89 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
-      {/* Hero Section */}
-      <div className="text-center mb-12">
-        <div className="mx-auto w-20 h-20 bg-gradient-to-br from-primary to-accent-foreground rounded-3xl flex items-center justify-center shadow-xl shadow-primary/20 mb-6">
-          <Shield className="w-10 h-10 text-white" />
+    <AuthLayout wrapperClassName="max-w-5xl">
+      <div className="flex flex-col items-center space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-4 bg-white/95 backdrop-blur-sm p-8 rounded-2xl shadow-xl border border-slate-200">
+          <div className="mx-auto w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+            <Shield className="w-10 h-10 text-white" />
+          </div>
+          <div>
+            <h1 className="text-4xl font-bold text-slate-900 tracking-tight">
+              SENTINEL
+            </h1>
+            <p className="text-slate-500 font-medium">
+              University Access Control System
+            </p>
+          </div>
         </div>
-        <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-          Sentinel
-        </h1>
-        <p className="text-xl text-muted-foreground max-w-md mx-auto">
-          University Access Control System
-        </p>
-      </div>
 
-      {/* Portal Selection */}
-      <div className="grid gap-4 md:grid-cols-2 max-w-2xl w-full">
-        <Card className="bg-white border-border hover:border-primary/50 hover:shadow-lg transition-all duration-200">
-          <CardHeader>
-            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-2">
-              <Smartphone className="w-6 h-6 text-primary" />
-            </div>
-            <CardTitle className="text-foreground">Student Portal</CardTitle>
-            <CardDescription>
-              Access your digital pass with dynamic QR code
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              asChild
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              <Link href="/student">Open Student Pass</Link>
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Navigation Grid */}
+        <div className="grid gap-6 md:grid-cols-3 w-full">
+          {/* Student Portal */}
+          <Card className="bg-white/95 backdrop-blur-sm border-slate-200 hover:border-blue-500/50 hover:shadow-xl transition-all duration-300 group">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                <Ticket className="w-7 h-7 text-blue-600" />
+              </div>
+              <CardTitle className="text-xl font-bold text-slate-900">
+                Student Portal
+              </CardTitle>
+              <CardDescription>Access your digital pass</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                asChild
+                className="w-full bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20"
+              >
+                <Link href="/login">Open Digital Pass</Link>
+              </Button>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-white border-border hover:border-amber-500/50 hover:shadow-lg transition-all duration-200">
-          <CardHeader>
-            <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center mb-2">
-              <Users className="w-6 h-6 text-amber-600" />
-            </div>
-            <CardTitle className="text-foreground">Admin Dashboard</CardTitle>
-            <CardDescription>
-              Manage students, view logs, and generate passes
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              asChild
-              variant="outline"
-              className="w-full border-border text-secondary-foreground hover:bg-secondary"
-            >
-              <Link href="/admin">Open Dashboard</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Staff Portal */}
+          <Card className="bg-white/95 backdrop-blur-sm border-slate-200 hover:border-emerald-500/50 hover:shadow-xl transition-all duration-300 group">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                <Users className="w-7 h-7 text-emerald-600" />
+              </div>
+              <CardTitle className="text-xl font-bold text-slate-900">
+                Staff Portal
+              </CardTitle>
+              <CardDescription>Manage student registrations</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                asChild
+                className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20"
+              >
+                <Link href="/manager/login">Manager Login</Link>
+              </Button>
+            </CardContent>
+          </Card>
 
-      {/* Login Link */}
-      <div className="mt-8">
-        <Link
-          href="/login"
-          className="text-sm text-muted-foreground hover:text-primary transition-colors"
-        >
-          Sign in to your account →
-        </Link>
+          {/* Admin Portal */}
+          <Card className="bg-white/95 backdrop-blur-sm border-slate-200 hover:border-red-500/50 hover:shadow-xl transition-all duration-300 group">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                <ShieldAlert className="w-7 h-7 text-red-600" />
+              </div>
+              <CardTitle className="text-xl font-bold text-slate-900">
+                Command Center
+              </CardTitle>
+              <CardDescription>System administration</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                asChild
+                className="w-full bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/20"
+              >
+                <Link href="/admin/login">Admin Access</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

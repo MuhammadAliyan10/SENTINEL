@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getManagerStats } from "@/actions/manager";
+import { getManagerStats } from "@/actions/manager-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, Printer, Wallet, Users } from "lucide-react";

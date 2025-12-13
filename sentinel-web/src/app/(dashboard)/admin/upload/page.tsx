@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { BulkUpload } from "@/components/admin/BulkUpload";
+import { BulkUpload } from "@/components/features/admin/BulkUpload";
 import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, Download, AlertCircle } from "lucide-react";
 

@@ -36,6 +36,11 @@ enum ScanStatus {
   DUPLICATE    // Blue Screen (Passback attempt)
 }
 
+enum ScanType {
+  ENTRY
+  EXIT
+}
+
 // --------------------------------------------------------
 // MODELS
 // --------------------------------------------------------
@@ -49,17 +54,18 @@ model User {
   // --- IDENTITY ---
   sapId       String  @unique @map("sap_id") // The Primary Identifier (e.g., 70168915)
   fullName    String? @map("full_name")
+  email       String? @unique // Unique for Managers/Admins, Nullable for Students
   cnic        String? // Optional initially, mandatory after onboarding
   phoneNumber String? @map("phone_number")
   gender      Gender? // Mandatory for lane routing
 
   // --- AUTHENTICATION & SECURITY ---
   role            UserRole @default(STUDENT)
-  activationToken String?  @unique @map("activation_token") // The "X7K-9P2" token (Indexed)
+  activationToken String?  @unique @map("activation_token") // The 6-char secret for Student Login (Indexed)
   passwordHash    String?  @map("password_hash") // For Admins/CRs only
 
   // --- STATUS FLAGS ---
-  isPaid           Boolean @default(false) @map("is_paid")
+  isPaid           Boolean @default(true) @map("is_paid") // Default true as per requirements
   profileCompleted Boolean @default(false) @map("profile_completed")
   isActive         Boolean @default(true)  @map("is_active") // Admin Kill Switch
 
@@ -83,28 +89,39 @@ model User {
   createdUsers User[]  @relation("UserCreator")
 
   // Entry Logs (History of scans)
-  accessLogs AccessLog[]
+  accessLogs AccessLog[] @relation("UserScans")
+
+  // Scans performed by this user (if Guard/Admin)
+  performedScans AccessLog[] @relation("Scanner")
+
+  // Audit Logs (Actions performed by this user)
+  auditLogs AuditLog[] @relation("AuditPerformer")
 
   // --- INDEXES ---
   @@index([sapId])
   @@index([activationToken])
-  @@index([role, section]) // For Admin Reports
+  @@index([role, isActive]) // For "Get All Active Students" queries
+  @@index([createdById]) // For "Manager Ledger" lookups
   @@map("users")
 }
 
 model AccessLog {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   timestamp DateTime @default(now())
 
   // --- WHO ---
   userId String @map("user_id")
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation("UserScans", fields: [userId], references: [id])
+
+  // --- WHO SCANNED ---
+  scannerId String? @map("scanner_id")
+  scanner   User?   @relation("Scanner", fields: [scannerId], references: [id])
 
   // --- RESULT ---
   status ScanStatus
+  type   ScanType
 
   // --- CONTEXT ---
-  scannerDeviceId String? @map("scanner_device_id") // To identify which phone scanned
   gateNumber      String? @map("gate_number")       // "Gate 1", "Female Lane"
 
   // --- METADATA ---
@@ -120,13 +137,15 @@ model AccessLog {
 // --------------------------------------------------------
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
 
-  adminId   String   @map("admin_id") // Who did it?
+  performerId String   @map("performer_id") // Who did it?
+  performer   User     @relation("AuditPerformer", fields: [performerId], references: [id])
+
   action    String   // "REVOKE_ACCESS", "FREEZE_CR", "MANUAL_ENTRY"
   targetId  String?  @map("target_id") // Who was affected?
-  details   String?
+  details   String?  // JSON or Text
 
   @@map("audit_logs")
 }

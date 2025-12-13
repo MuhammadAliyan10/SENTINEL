@@ -18,6 +18,9 @@ export async function middleware(request: NextRequest) {
     request,
   });
 
+  // Add pathname header for layouts to read
+  supabaseResponse.headers.set("x-pathname", request.nextUrl.pathname);
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -33,6 +36,8 @@ export async function middleware(request: NextRequest) {
           supabaseResponse = NextResponse.next({
             request,
           });
+          // Re-add pathname header after response recreation
+          supabaseResponse.headers.set("x-pathname", request.nextUrl.pathname);
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -52,13 +57,25 @@ export async function middleware(request: NextRequest) {
   // ADMIN ROUTES - Session Check Only
   // Role verification happens in layout.tsx
   // ============================================
-  if (pathname.startsWith("/admin")) {
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     if (!user) {
-      const loginUrl = new URL("/login", request.url);
+      const loginUrl = new URL("/admin/login", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
     }
     // Don't check role here - let layout.tsx handle it with Prisma
+    return supabaseResponse;
+  }
+
+  // ============================================
+  // MANAGER ROUTES - Session Check Only
+  // ============================================
+  if (pathname.startsWith("/manager") && pathname !== "/manager/login") {
+    if (!user) {
+      const loginUrl = new URL("/manager/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
     return supabaseResponse;
   }
 
@@ -79,7 +96,7 @@ export async function middleware(request: NextRequest) {
   // ============================================
   if (pathname.startsWith("/guard")) {
     if (!user) {
-      const loginUrl = new URL("/login", request.url);
+      const loginUrl = new URL("/login", request.url); // Guards might need their own login later
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -87,11 +104,19 @@ export async function middleware(request: NextRequest) {
   }
 
   // ============================================
-  // LOGIN PAGE - Redirect if already authenticated
+  // LOGIN PAGE REDIRECTS
   // ============================================
-  if (user && pathname === "/login") {
-    // Redirect to root for smart dispatching based on role
-    return NextResponse.redirect(new URL("/", request.url));
+  if (user) {
+    if (
+      pathname === "/login" ||
+      pathname === "/admin/login" ||
+      pathname === "/manager/login"
+    ) {
+      // If user is already logged in, redirect them to their respective dashboard
+      // We can't easily know the role here without Prisma, so we send to home
+      // and let the home page redirect based on role (if implemented) or just /
+      return NextResponse.redirect(new URL("/", request.url));
+    }
   }
 
   return supabaseResponse;

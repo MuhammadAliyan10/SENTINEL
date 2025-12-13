@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getManagerStats } from "@/actions/manager";
+import { getManagerStats } from "@/actions/manager-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -102,7 +102,14 @@ export default async function ProfilePage() {
         </Card>
       </div>
 
-      <form action="/auth/signout" method="post">
+      <form
+        action={async () => {
+          "use server";
+          const supabase = await createClient();
+          await supabase.auth.signOut();
+          redirect("/login");
+        }}
+      >
         <Button
           variant="destructive"
           className="w-full h-12 text-base shadow-sm"

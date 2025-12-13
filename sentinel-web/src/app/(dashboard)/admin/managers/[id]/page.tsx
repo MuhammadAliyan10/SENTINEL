@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getManagerById, getManagerStats } from "@/actions/managers";
+import { getManagerById, getManagerStats } from "@/actions/managers-actions";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -223,7 +223,7 @@ async function AuditLogsTable({ managerId }: AuditLogsTableProps) {
                   {log.details || "—"}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {new Date(log.createdAt).toLocaleString()}
+                  {new Date(log.timestamp).toLocaleString()}
                 </TableCell>
               </TableRow>
             ))}

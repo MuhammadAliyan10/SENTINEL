@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StudentStatsView } from "@/components/students/StudentStatsView";
-import { StudentsDirectory } from "@/components/students/StudentsDirectory";
-import { StudentSearchConsole } from "@/components/students/StudentSearchConsole";
-import { getStudentStats, getAllStudents } from "@/actions/students";
+import { StudentStatsView } from "@/components/features/admin/students/StudentStatsView";
+import { StudentsDirectory } from "@/components/features/admin/students/StudentsDirectory";
+import { StudentSearchConsole } from "@/components/features/admin/students/StudentSearchConsole";
+import { getStudentStats, getAllStudents } from "@/actions/students-actions";
 import { Loader2, LayoutDashboard, Users, Search } from "lucide-react";
 
 export const dynamic = "force-dynamic";

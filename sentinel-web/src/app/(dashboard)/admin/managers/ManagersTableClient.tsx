@@ -9,7 +9,7 @@ import {
   type ManagerRow,
   type ManagerActions,
 } from "./columns";
-import { toggleManagerActive, deleteManager } from "@/actions/managers";
+import { toggleManagerActive, deleteManager } from "@/actions/managers-actions";
 import {
   AlertDialog,
   AlertDialogAction,

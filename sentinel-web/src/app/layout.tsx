@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sentinel - University Access Control",
+  title: "Sentinel | University Access Control",
   description: "High-security access control system for university campuses",
   manifest: "/manifest.json",
   appleWebApp: {
@@ -42,12 +42,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="light">
+    <html lang="en" className="light" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         {children}
-        <Toaster />
+        <Toaster position="top-right" theme="light" richColors closeButton />
       </body>
     </html>
   );

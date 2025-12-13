@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
-import { ManagerBottomNav } from "@/components/manager/ManagerBottomNav";
-import { ManagerTopNav } from "@/components/manager/ManagerTopNav";
+import { ManagerBottomNav } from "@/components/features/manager/ManagerBottomNav";
+import { ManagerTopNav } from "@/components/features/manager/ManagerTopNav";
 
 export default async function ManagerLayout({
   children,
@@ -15,7 +15,7 @@ export default async function ManagerLayout({
   } = await supabase.auth.getUser();
 
   if (!supabaseUser) {
-    redirect("/login");
+    redirect("/manager/login");
   }
 
   const user = await prisma.user.findUnique({
@@ -28,7 +28,7 @@ export default async function ManagerLayout({
   }
 
   if (user.role !== "CR" && user.role !== "GR" && user.role !== "SUPER_ADMIN") {
-    redirect("/unauthorized");
+    redirect("/manager/login");
   }
 
   return (

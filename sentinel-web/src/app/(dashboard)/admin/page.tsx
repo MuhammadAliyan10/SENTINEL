@@ -1,29 +1,35 @@
 import { Suspense } from "react";
-import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatsGrid } from "@/components/dashboard/StatsGrid";
+import { LayoutDashboard, BarChart3, Activity } from "lucide-react";
+
+// Actions
+import {
+  getDashboardStats,
+  getTrafficData,
+  getPaymentLeaderboard,
+  getManagerLiability,
+} from "@/actions/dashboard-actions";
+
+// Components
+import { KPIGrid } from "@/components/features/admin/dashboard/KPIGrid";
+import { TrafficChart } from "@/components/features/admin/dashboard/TrafficChart";
+import { PaymentLeaderboard } from "@/components/features/admin/dashboard/PaymentLeaderboard";
+import { ManagerLiabilityTable } from "@/components/features/admin/dashboard/ManagerLiabilityTable";
+import { LiveFeed } from "@/components/features/admin/dashboard/LiveFeed";
+import { RecentActivityList } from "@/components/features/admin/dashboard/RecentActivityList";
+
+// Legacy Analytics (Keep for Analytics Tab)
 import {
   StudentsBySemesterChart,
   DepartmentDistributionChart,
   EntryVelocityChart,
   ManagerPerformanceChart,
-} from "@/components/dashboard/AnalyticsChart";
-import { RecentActivityList } from "@/components/dashboard/RecentActivityList";
-import {
-  LayoutDashboard,
-  BarChart3,
-  Activity,
-  Users,
-  DollarSign,
-  UserCheck,
-  Shield,
-  Clock,
-} from "lucide-react";
+} from "@/components/features/admin/dashboard/AnalyticsChart";
 
 export const dynamic = "force-dynamic";
 
@@ -50,120 +56,64 @@ async function verifyAdmin() {
 }
 
 // ============================================
-// DATA FETCHING
+// SKELETONS
 // ============================================
 
-const getCachedStats = unstable_cache(
-  async () => {
-    const now = new Date();
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
+function StatsSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {[...Array(4)].map((_, i) => (
+        <Skeleton key={i} className="h-32" />
+      ))}
+    </div>
+  );
+}
 
-    const [totalStudents, totalManagers, todayEntries, todayRejected] =
-      await Promise.all([
-        prisma.user.count({ where: { role: "STUDENT" } }),
-        prisma.user.count({ where: { role: { in: ["CR", "GR"] } } }),
-        prisma.accessLog.count({
-          where: {
-            status: "GRANTED",
-            timestamp: { gte: todayStart, lt: todayEnd },
-          },
-        }),
-        prisma.accessLog.count({
-          where: {
-            status: "REJECTED",
-            timestamp: { gte: todayStart, lt: todayEnd },
-          },
-        }),
-      ]);
+function ChartSkeleton() {
+  return <Skeleton className="h-[350px]" />;
+}
 
-    return {
-      totalStudents,
-      totalManagers,
-      totalRevenue: totalStudents * 2000,
-      todayEntries,
-      todayRejected,
-    };
-  },
-  ["dashboard-stats"],
-  { tags: ["dashboard-stats"], revalidate: 30 }
-);
+// ============================================
+// DATA FETCHING WRAPPERS
+// ============================================
 
-const getCachedAnalytics = unstable_cache(
-  async () => {
-    // Students by Semester
-    const semesterCounts = await prisma.user.groupBy({
-      by: ["semester"],
-      where: { role: "STUDENT", semester: { not: null } },
-      _count: { id: true },
-      orderBy: { semester: "asc" },
-    });
+async function WarRoomOverview() {
+  const [stats, traffic, leaderboard, liability] = await Promise.all([
+    getDashboardStats(),
+    getTrafficData(),
+    getPaymentLeaderboard(),
+    getManagerLiability(),
+  ]);
 
-    type SemesterCount = { semester: string | null; _count: { id: number } };
-    const semesterData = semesterCounts.map((s: SemesterCount) => ({
-      semester: `Sem ${s.semester}`,
-      count: s._count.id,
-    }));
+  return (
+    <div className="space-y-6">
+      {/* Row 1: The Pulse */}
+      <KPIGrid data={stats} />
 
-    // Students by Department
-    const departmentCounts = await prisma.user.groupBy({
-      by: ["department"],
-      where: { role: "STUDENT", department: { not: null } },
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-      take: 6,
-    });
+      {/* Row 2: The Deep Dive */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <TrafficChart data={traffic} />
+        <PaymentLeaderboard data={leaderboard} />
+      </div>
 
-    type DeptCount = { department: string | null; _count: { id: number } };
-    const departmentData = departmentCounts.map((d: DeptCount) => ({
-      department: d.department || "Other",
-      count: d._count.id,
-      paid: d._count.id, // All registered = paid
-    }));
+      {/* Row 3: The Action */}
+      <div className="grid gap-6 md:grid-cols-5">
+        <div className="md:col-span-3">
+          <ManagerLiabilityTable data={liability} />
+        </div>
+        <div className="md:col-span-2">
+          <LiveFeed />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-    // Top managers
-    const managerStats = await prisma.user.groupBy({
-      by: ["createdById"],
-      where: { role: "STUDENT", createdById: { not: null } },
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-      take: 5,
-    });
-
-    const managerIds = managerStats
-      .map((m: { createdById: string | null }) => m.createdById)
-      .filter(Boolean) as string[];
-
-    const managers = await prisma.user.findMany({
-      where: { id: { in: managerIds } },
-      select: { id: true, fullName: true, sapId: true },
-    });
-
-    type ManagerStat = { createdById: string | null; _count: { id: number } };
-    const managerData = managerStats.map((m: ManagerStat) => {
-      const manager = managers.find((mgr) => mgr.id === m.createdById);
-      return {
-        name: manager?.fullName?.split(" ")[0] || manager?.sapId || "Unknown",
-        registrations: m._count.id,
-        revenue: m._count.id * 2000,
-      };
-    });
-
-    return { semesterData, departmentData, managerData };
-  },
-  ["dashboard-analytics"],
-  { tags: ["dashboard-analytics"], revalidate: 60 }
-);
-
-async function getRecentLogs(limit: number = 50) {
-  return prisma.accessLog.findMany({
+async function ActivityLogs() {
+  // Fetch logs directly here or use a helper
+  const logs = await prisma.accessLog.findMany({
     orderBy: { timestamp: "desc" },
-    take: limit,
+    take: 50,
     select: {
       id: true,
       timestamp: true,
@@ -172,97 +122,7 @@ async function getRecentLogs(limit: number = 50) {
       user: { select: { sapId: true, fullName: true } },
     },
   });
-}
-
-// ============================================
-// SKELETONS
-// ============================================
-
-function StatsSkeleton() {
-  return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      {[...Array(4)].map((_, i) => (
-        <Skeleton key={i} className="h-24" />
-      ))}
-    </div>
-  );
-}
-
-function ChartSkeleton() {
-  return <Skeleton className="h-80" />;
-}
-
-// ============================================
-// ASYNC COMPONENTS
-// ============================================
-
-async function OverviewStats() {
-  const data = await getCachedStats();
-
-  const stats = [
-    {
-      title: "Total Revenue",
-      value: `Rs. ${data.totalRevenue.toLocaleString()}`,
-      icon: DollarSign,
-      iconColor: "text-emerald-600",
-    },
-    {
-      title: "Students Registered",
-      value: data.totalStudents.toLocaleString(),
-      icon: Users,
-      iconColor: "text-primary",
-    },
-    {
-      title: "Active Managers",
-      value: data.totalManagers,
-      icon: UserCheck,
-      iconColor: "text-blue-600",
-    },
-    {
-      title: "Today's Entries",
-      value: data.todayEntries.toLocaleString(),
-      icon: Clock,
-      iconColor: "text-amber-600",
-    },
-  ];
-
-  return <StatsGrid stats={stats} />;
-}
-
-async function AnalyticsCharts() {
-  const { semesterData, departmentData, managerData } =
-    await getCachedAnalytics();
-
-  // Mock hourly data for entry velocity
-  const hourlyData = [
-    { hour: "6AM", entries: 45, exits: 0 },
-    { hour: "8AM", entries: 280, exits: 25 },
-    { hour: "10AM", entries: 80, exits: 35 },
-    { hour: "12PM", entries: 35, exits: 120 },
-    { hour: "2PM", entries: 60, exits: 95 },
-    { hour: "4PM", entries: 25, exits: 200 },
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Row 1 */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <StudentsBySemesterChart data={semesterData} />
-        <DepartmentDistributionChart data={departmentData} />
-      </div>
-
-      {/* Row 2 */}
-      <EntryVelocityChart data={hourlyData} showExits={true} />
-
-      {/* Row 3 */}
-      {managerData.length > 0 && <ManagerPerformanceChart data={managerData} />}
-    </div>
-  );
-}
-
-async function ActivityLogs({ limit }: { limit: number }) {
-  const logs = await getRecentLogs(limit);
-  return <RecentActivityList logs={logs} limit={limit} showFilters={true} />;
+  return <RecentActivityList logs={logs} limit={50} showFilters={true} />;
 }
 
 // ============================================
@@ -275,8 +135,8 @@ export default async function AdminDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dashboard"
-        description="Overview of campus access and registrations."
+        title="War Room"
+        description="Real-time operational command center."
       />
 
       <Tabs defaultValue="overview" className="flex h-full flex-col">
@@ -288,12 +148,6 @@ export default async function AdminDashboard() {
             <LayoutDashboard className="h-4 w-4" /> Overview
           </TabsTrigger>
           <TabsTrigger
-            value="analytics"
-            className="relative gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
-          >
-            <BarChart3 className="h-4 w-4" /> Analytics
-          </TabsTrigger>
-          <TabsTrigger
             value="activity"
             className="relative gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
           >
@@ -301,24 +155,17 @@ export default async function AdminDashboard() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Overview - Stats Cards */}
+        {/* Overview - War Room */}
         <TabsContent value="overview" className="space-y-6">
           <Suspense fallback={<StatsSkeleton />}>
-            <OverviewStats />
-          </Suspense>
-        </TabsContent>
-
-        {/* Analytics - Charts */}
-        <TabsContent value="analytics" className="space-y-6">
-          <Suspense fallback={<ChartSkeleton />}>
-            <AnalyticsCharts />
+            <WarRoomOverview />
           </Suspense>
         </TabsContent>
 
         {/* Activity - Logs Table */}
         <TabsContent value="activity">
           <Suspense fallback={<ChartSkeleton />}>
-            <ActivityLogs limit={50} />
+            <ActivityLogs />
           </Suspense>
         </TabsContent>
       </Tabs>

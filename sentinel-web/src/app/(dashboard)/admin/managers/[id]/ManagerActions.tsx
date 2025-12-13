@@ -6,7 +6,8 @@ import {
   toggleManagerActive,
   deleteManager,
   type ManagerDetail,
-} from "@/actions/managers";
+} from "@/actions/managers-actions";
+import { EditManagerDialog } from "@/components/features/admin/EditManagerDialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,7 +26,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreVertical, Shield, ShieldOff, Trash2, Loader2 } from "lucide-react";
+import {
+  MoreVertical,
+  Shield,
+  ShieldOff,
+  Trash2,
+  Loader2,
+  Pencil,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface ManagerActionsProps {
@@ -36,6 +44,7 @@ export function ManagerActions({ manager }: ManagerActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const handleToggleActive = () => {
     startTransition(async () => {
@@ -75,6 +84,10 @@ export function ManagerActions({ manager }: ManagerActionsProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit Details
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={handleToggleActive}>
             {manager.isActive ? (
               <>
@@ -98,6 +111,13 @@ export function ManagerActions({ manager }: ManagerActionsProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Edit Dialog */}
+      <EditManagerDialog
+        manager={manager}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

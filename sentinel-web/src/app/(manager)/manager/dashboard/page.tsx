@@ -2,9 +2,9 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getManagerStats, getManagerLedger } from "@/actions/manager";
-import { IssuePassForm } from "@/components/manager/IssuePassForm";
-import { LedgerList } from "@/components/manager/LedgerList";
+import { getManagerStats, getManagerLedger } from "@/actions/manager-actions";
+import { IssuePassForm } from "@/components/features/manager/IssuePassForm";
+import { LedgerList } from "@/components/features/manager/LedgerList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,7 +52,7 @@ export default async function ManagerDashboardPage({
             Hello, {user.fullName?.split(" ")[0] || "Manager"}
           </h1>
           <div className="flex items-center gap-2 mt-1">
-            <Badge variant="secondary" className="font-mono">
+            <Badge variant="default" className="font-mono">
               {user.role}
             </Badge>
             {user.section && (

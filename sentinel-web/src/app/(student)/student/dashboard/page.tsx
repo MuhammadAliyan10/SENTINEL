@@ -1,0 +1,66 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { getTicketData } from "@/actions/student-actions";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import DigitalPass from "@/components/features/student/DigitalPass";
+
+interface TicketData {
+  user: {
+    id: string;
+    sapId: string;
+    fullName: string | null;
+    profilePhotoUrl: string | null;
+    gender: "MALE" | "FEMALE" | "OTHER" | null;
+    section: string | null;
+    activationToken: string | null;
+  };
+  qrCode: string;
+  timestamp: number;
+}
+
+export default function StudentDashboard() {
+  const [data, setData] = useState<TicketData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = async () => {
+    try {
+      const res = await getTicketData();
+      if (res) {
+        // @ts-ignore
+        setData(res);
+        localStorage.setItem("cachedTicket", JSON.stringify(res));
+      }
+    } catch (error) {
+      console.error("Fetch Error:", error);
+      const cached = localStorage.getItem("cachedTicket");
+      if (cached) {
+        setData(JSON.parse(cached));
+        toast.warning("Offline Mode: Using cached ticket");
+      } else {
+        toast.error("Network error and no cached ticket found.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="h-10 w-10 text-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  return <DigitalPass user={data.user} />;
+}

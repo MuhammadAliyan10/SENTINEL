@@ -90,7 +90,33 @@ export function DataTableToolbar({
       </div>
 
       {/* Action Buttons Slot */}
-      {children && <div className="flex items-center gap-2">{children}</div>}
+      <div className="flex items-center gap-2">
+        <RefreshButton />
+        {children}
+      </div>
     </div>
+  );
+}
+
+function RefreshButton() {
+  const router = useRouter();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    router.refresh();
+    setTimeout(() => setIsRefreshing(false), 1000); // Visual feedback
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      onClick={handleRefresh}
+      disabled={isRefreshing}
+      title="Refresh Data"
+    >
+      <Loader2 className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+    </Button>
   );
 }

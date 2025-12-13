@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
-import { generateTimeToken } from "@/actions/security";
+import { generateTimeToken } from "@/actions/security-actions";
 
 interface StudentProfile {
   id: string;

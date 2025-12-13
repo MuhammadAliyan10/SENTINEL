@@ -100,6 +100,63 @@ export const getManagerStats = async () => {
   )();
 };
 
+export interface ManagerSummary {
+  manager: {
+    fullName: string | null;
+    section: string | null;
+    semester: string | null;
+  };
+  stats: {
+    cashCollected: number;
+    totalPasses: number;
+    ticketPrice: number;
+  };
+  students: {
+    id: string;
+    fullName: string | null;
+    sapId: string;
+    createdAt: string;
+  }[];
+}
+
+export const getManagerSummary = async (): Promise<ManagerSummary> => {
+  const managerId = await getManagerId();
+
+  const [manager, ticketPrice, students] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: managerId },
+      select: { fullName: true, section: true, semester: true },
+    }),
+    getTicketPrice(),
+    prisma.user.findMany({
+      where: {
+        createdById: managerId,
+        role: "STUDENT",
+      },
+      select: {
+        id: true,
+        fullName: true,
+        sapId: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return {
+    manager: manager || { fullName: null, section: null, semester: null },
+    stats: {
+      cashCollected: students.length * ticketPrice,
+      totalPasses: students.length,
+      ticketPrice,
+    },
+    students: students.map((s) => ({
+      ...s,
+      createdAt: s.createdAt.toISOString(),
+    })),
+  };
+};
+
 export const getManagerLedger = async (
   page: number = 1,
   limit: number = 10
@@ -118,6 +175,7 @@ export const getManagerLedger = async (
           select: {
             id: true,
             sapId: true,
+            fullName: true,
             activationToken: true,
             createdAt: true,
           },
@@ -137,7 +195,6 @@ export const getManagerLedger = async (
         data: data.map((d) => ({
           ...d,
           createdAt: d.createdAt.toISOString(),
-          fullName: null,
         })),
         total,
         totalPages: Math.ceil(total / limit),
@@ -148,12 +205,22 @@ export const getManagerLedger = async (
   )();
 };
 
-export async function issuePass(sapId: string): Promise<IssuePassResult> {
+export async function issuePass(
+  sapId: string,
+  fullName: string
+): Promise<IssuePassResult> {
   try {
     const managerId = await getManagerId();
 
     if (!sapId || !/^\d+$/.test(sapId)) {
       return { success: false, message: "Invalid SAP ID format" };
+    }
+
+    if (!fullName || fullName.trim().length < 3) {
+      return {
+        success: false,
+        message: "Full name is required (min 3 characters)",
+      };
     }
 
     // RATE LIMITING: Check passes issued in the last minute
@@ -257,6 +324,7 @@ export async function issuePass(sapId: string): Promise<IssuePassResult> {
             data: {
               id: authUserId,
               sapId,
+              fullName: fullName.trim(),
               role: "STUDENT",
               isPaid: true,
               isActive: true,

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import { ShieldAlert, Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
@@ -15,14 +15,12 @@ import {
   logSuccessfulLogin,
   logFailedLogin,
 } from "@/actions/auth-actions";
-import { AuthLayout } from "@/components/auth/AuthLayout";
-import { AuthCard } from "@/components/auth/AuthCard";
+import Image from "next/image";
 
 // SECURITY: Validate redirect path to prevent open redirect attacks
 function validateRedirectPath(path: string | null): string {
   const defaultPath = "/admin";
   if (!path) return defaultPath;
-  // Must start with /admin and not contain protocol or double slashes
   if (
     !path.startsWith("/admin") ||
     path.startsWith("//") ||
@@ -50,7 +48,6 @@ function AdminLoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Client-side validation
     if (!email || !email.includes("@")) {
       setError("Please enter a valid email address");
       return;
@@ -72,28 +69,26 @@ function AdminLoginForm() {
         });
 
       if (authError) {
-        await logFailedLogin(email, authError.message);
+        logFailedLogin(email, authError.message);
         throw new Error(authError.message);
       }
 
       if (!authData.user) {
-        await logFailedLogin(email, "No user returned");
+        logFailedLogin(email, "No user returned");
         throw new Error("Authentication failed");
       }
 
-      // Role Check (Client-side optimization)
-      const role = authData.user.user_metadata?.role;
+      const role = await getUserRole();
+
       if (role !== "SUPER_ADMIN") {
         await supabase.auth.signOut();
-        await logFailedLogin(email, "Unauthorized role: " + role);
+        logFailedLogin(email, "Unauthorized role: " + role);
         throw new Error("Access Denied: Administrator privileges required");
       }
 
-      // Log successful login
-      await logSuccessfulLogin(authData.user.id, "SUPER_ADMIN");
+      logSuccessfulLogin(authData.user.id, "SUPER_ADMIN");
 
       toast.success("Welcome back, Commander");
-      // Use full page reload to ensure session is recognized
       window.location.href = redirectPath;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to sign in";
@@ -104,72 +99,100 @@ function AdminLoginForm() {
   };
 
   return (
-    <AuthLayout>
-      <AuthCard
-        title="Command Center"
-        description="Restricted Access. All actions are monitored."
-        icon={
-          <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg shadow-red-600/30">
-            <ShieldAlert className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Logo Section */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        <div className="w-full max-w-sm space-y-8">
+          {/* University Logo */}
+          <div className="flex justify-center">
+            <Image
+              src="/UniversityLogo.jpeg"
+              alt="University Logo"
+              width={220}
+              height={120}
+              priority
+            />
           </div>
-        }
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Admin Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="admin@sentinel.edu"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="h-11"
-            />
+          {/* Title */}
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-foreground">
+              Admin Command Center
+            </h1>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Passcode</Label>
-            <PasswordInput
-              id="password"
-              placeholder="••••••••"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="h-11"
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-red-600 hover:bg-red-700 text-white font-medium h-11 shadow-lg shadow-red-600/20"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Authenticating...
-              </>
-            ) : (
-              "Access Terminal"
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <Alert variant="destructive" className="border-destructive/50">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
-          </Button>
-        </form>
-      </AuthCard>
-    </AuthLayout>
+
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">
+                Admin Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="admin@sentinel.edu"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-14 text-lg bg-background border-2 border-muted focus:border-primary"
+              />
+            </div>
+
+            {/* Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium">
+                Passcode
+              </Label>
+              <PasswordInput
+                id="password"
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="h-14 text-lg bg-background border-2 border-muted focus:border-primary"
+              />
+            </div>
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Authenticating...
+                </>
+              ) : (
+                "Access Terminal"
+              )}
+            </Button>
+          </form>
+
+          {/* Footer */}
+          <p className="text-center text-xs text-muted-foreground">
+            Restricted Access • All actions are monitored
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function AdminLoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
       <AdminLoginForm />
     </Suspense>
   );

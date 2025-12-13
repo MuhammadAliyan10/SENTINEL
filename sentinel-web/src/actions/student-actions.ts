@@ -8,7 +8,6 @@ import { createHmac } from "crypto";
 import { z } from "zod";
 
 const profileSchema = z.object({
-  fullName: z.string().min(3, "Full name must be at least 3 characters"),
   cnic: z
     .string()
     .regex(/^\d{5}-\d{7}-\d{1}$/, "Invalid CNIC format (e.g. 12345-1234567-1)"),
@@ -41,7 +40,6 @@ export async function completeProfile(formData: FormData) {
   }
 
   const rawData = {
-    fullName: formData.get("fullName"),
     cnic: formData.get("cnic"),
     phoneNumber: formData.get("phoneNumber"),
     gender: formData.get("gender"),
@@ -61,7 +59,6 @@ export async function completeProfile(formData: FormData) {
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        fullName: data.fullName,
         cnic: data.cnic,
         phoneNumber: data.phoneNumber,
         gender: data.gender,

@@ -47,7 +47,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <NextTopLoader
-          color="hsl(var(--primary))"
+          color="#4f39f6"
           initialPosition={0.08}
           crawlSpeed={200}
           height={3}
@@ -55,7 +55,7 @@ export default function RootLayout({
           showSpinner={false}
           easing="ease"
           speed={200}
-          shadow="0 0 10px hsl(var(--primary)),0 0 5px hsl(var(--primary))"
+          shadow="0 0 10px #4f39f6,0 0 5px #4f39f6"
         />
         {children}
         <Toaster position="top-right" theme="light" richColors closeButton />

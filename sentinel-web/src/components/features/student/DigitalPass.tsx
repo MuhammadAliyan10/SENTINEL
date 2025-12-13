@@ -206,37 +206,84 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
   }
 
   // ----------------------------------------
-  // RENDER: Inside State (Entry Success)
+  // RENDER: Inside State (Entry Success + QR for Exit)
   // ----------------------------------------
   if (accessState === "INSIDE") {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-gray-50 p-4 overflow-hidden">
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center space-y-6">
-          <div className="mx-auto w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center">
-            <PartyPopper className="h-10 w-10 text-emerald-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Welcome!</h1>
-            <p className="text-slate-500 mt-1">{user.fullName || "Guest"}</p>
-          </div>
-          {lastEntry && (
-            <div className="bg-emerald-50 rounded-xl p-4">
-              <p className="text-xs text-emerald-600 uppercase font-medium">
-                Entered At
-              </p>
-              <p className="text-lg font-mono font-bold text-emerald-700">
-                {lastEntry.toLocaleTimeString("en-US", { hour12: true })}
-              </p>
-            </div>
-          )}
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-full text-sm font-medium">
-            <CheckCircle2 className="h-4 w-4" />
-            You&apos;re Inside
-          </div>
-          <p className="text-xs text-slate-400">
-            Scan again at exit to check out
-          </p>
+      <div
+        className="min-h-[100dvh] flex flex-col items-center justify-center bg-gray-50 p-4 pb-24 overflow-hidden"
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Background Animation */}
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-500/20 via-transparent to-transparent animate-pulse-slow" />
         </div>
+
+        <CardContainer className="inter-var w-full max-w-sm">
+          <CardBody className="bg-white relative group/card border-emerald-100 w-full h-auto rounded-xl p-6 border shadow-xl">
+            {/* Status Badge */}
+            <CardItem translateZ="50" className="w-full flex justify-center">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-full text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4" />
+                You&apos;re Inside
+              </div>
+            </CardItem>
+
+            {/* Welcome Message */}
+            <CardItem translateZ="40" className="w-full text-center mt-4">
+              <h1 className="text-xl font-bold text-slate-900">
+                Welcome, {user.fullName || "Guest"}!
+              </h1>
+              {lastEntry && (
+                <p className="text-sm text-slate-500 mt-1">
+                  Entered at{" "}
+                  {lastEntry.toLocaleTimeString("en-US", { hour12: true })}
+                </p>
+              )}
+            </CardItem>
+
+            {/* QR Code for Exit */}
+            <CardItem
+              translateZ="100"
+              className="w-full flex flex-col items-center py-4"
+            >
+              <p className="text-xs text-slate-500 mb-3">
+                Show this code at exit to check out
+              </p>
+              <div
+                className={cn(
+                  "p-3 bg-white rounded-xl border-4 transition-all duration-300 shadow-inner",
+                  isOffline ? "border-yellow-400" : "border-emerald-200"
+                )}
+              >
+                <QRCodeSVG
+                  value={qrPayload}
+                  size={200}
+                  level="H"
+                  includeMargin={true}
+                  className="rounded-lg"
+                />
+              </div>
+            </CardItem>
+
+            {/* Status */}
+            <CardItem translateZ="30" className="w-full flex justify-center">
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                {isOffline ? (
+                  <>
+                    <WifiOff className="h-3 w-3" />
+                    Offline Mode
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    Live Code
+                  </>
+                )}
+              </div>
+            </CardItem>
+          </CardBody>
+        </CardContainer>
       </div>
     );
   }

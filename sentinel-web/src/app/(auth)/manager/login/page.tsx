@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import { Users, Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import {
@@ -15,14 +15,12 @@ import {
   logSuccessfulLogin,
   logFailedLogin,
 } from "@/actions/auth-actions";
-import { AuthLayout } from "@/components/auth/AuthLayout";
-import { AuthCard } from "@/components/auth/AuthCard";
+import Image from "next/image";
 
 // SECURITY: Validate redirect path to prevent open redirect attacks
 function validateRedirectPath(path: string | null): string {
   const defaultPath = "/manager/dashboard";
   if (!path) return defaultPath;
-  // Must start with /manager and not contain protocol or double slashes
   if (
     !path.startsWith("/manager") ||
     path.startsWith("//") ||
@@ -50,7 +48,6 @@ function ManagerLoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Client-side validation
     if (!email || !email.includes("@")) {
       setError("Please enter a valid email address");
       return;
@@ -72,28 +69,26 @@ function ManagerLoginForm() {
         });
 
       if (authError) {
-        await logFailedLogin(email, authError.message);
+        logFailedLogin(email, authError.message);
         throw new Error(authError.message);
       }
 
       if (!authData.user) {
-        await logFailedLogin(email, "No user returned");
+        logFailedLogin(email, "No user returned");
         throw new Error("Authentication failed");
       }
 
-      // Role Check - allow CR or GR
-      const role = authData.user.user_metadata?.role;
-      if (role !== "CR" && role !== "GR") {
+      const role = await getUserRole();
+
+      if (role !== "CR" && role !== "GR" && role !== "SUPER_ADMIN") {
         await supabase.auth.signOut();
-        await logFailedLogin(email, "Unauthorized role: " + role);
+        logFailedLogin(email, "Unauthorized role: " + role);
         throw new Error("Access Denied: Manager privileges required");
       }
 
-      // Log successful login
-      await logSuccessfulLogin(authData.user.id, role);
+      logSuccessfulLogin(authData.user.id, role);
 
       toast.success("Welcome, Manager");
-      // Use full page reload to ensure session is recognized
       window.location.href = redirectPath;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to sign in";
@@ -104,72 +99,101 @@ function ManagerLoginForm() {
   };
 
   return (
-    <AuthLayout>
-      <AuthCard
-        title="Staff Portal"
-        description="Authorized Personnel Only"
-        icon={
-          <div className="w-12 h-12 bg-emerald-600 rounded-full flex items-center justify-center shadow-lg shadow-emerald-600/30">
-            <Users className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Logo Section */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        <div className="w-full max-w-sm space-y-8">
+          {/* University Logo */}
+          <div className="flex justify-center">
+            <Image
+              src="/UniversityLogo.jpeg"
+              alt="University Logo"
+              width={220}
+              height={120}
+              className=""
+              priority
+            />
           </div>
-        }
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="manager@sentinel.edu"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="h-11"
-            />
+          {/* Title */}
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-foreground">
+              Login as Manager
+            </h1>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <PasswordInput
-              id="password"
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="h-11"
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium h-11 shadow-lg shadow-emerald-600/20"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Verifying Credentials...
-              </>
-            ) : (
-              "Enter Portal"
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <Alert variant="destructive" className="border-destructive/50">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
-          </Button>
-        </form>
-      </AuthCard>
-    </AuthLayout>
+
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">
+                Email Address
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="your.email@example.com"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-14 text-lg bg-background border-2 border-muted focus:border-primary"
+              />
+            </div>
+
+            {/* Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium">
+                Password
+              </Label>
+              <PasswordInput
+                id="password"
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="h-14 text-lg bg-background border-2 border-muted focus:border-primary"
+              />
+            </div>
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Enter Portal"
+              )}
+            </Button>
+          </form>
+
+          {/* Footer */}
+          <p className="text-center text-xs text-muted-foreground">
+            Manager portal for CR/GR only
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function ManagerLoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
       <ManagerLoginForm />
     </Suspense>
   );

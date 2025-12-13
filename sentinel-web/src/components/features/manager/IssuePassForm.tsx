@@ -37,6 +37,10 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 
 const formSchema = z.object({
+  fullName: z
+    .string()
+    .min(3, "Full name is required (min 3 characters)")
+    .max(100, "Name too long"),
   sapId: z
     .string()
     .min(1, "SAP ID is required")
@@ -48,20 +52,26 @@ export function IssuePassForm() {
   const [result, setResult] = useState<{
     token: string;
     sapId: string;
+    fullName: string;
   } | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      fullName: "",
       sapId: "",
     },
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      const res = await issuePass(values.sapId);
+      const res = await issuePass(values.sapId, values.fullName);
       if (res.success && res.token) {
-        setResult({ token: res.token, sapId: values.sapId });
+        setResult({
+          token: res.token,
+          sapId: values.sapId,
+          fullName: values.fullName,
+        });
         toast.success("Pass issued successfully!");
         form.reset();
       } else {
@@ -74,7 +84,7 @@ export function IssuePassForm() {
 
   const handleCopy = () => {
     if (!result) return;
-    const text = `Payment Received for SAP ID ${result.sapId}.\nToken: ${result.token}\nLogin: https://sentineluol.vercel.app/login`;
+    const text = `Payment Received for ${result.fullName} (SAP ID: ${result.sapId}).\nToken: ${result.token}\nLogin: https://sentineluol.vercel.app/login`;
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard");
   };
@@ -83,7 +93,7 @@ export function IssuePassForm() {
     if (!result) return;
     const message = `🎓 *SENTINEL ACCESS PASS*
 
-Dear Student (${result.sapId}),
+Dear ${result.fullName},
 
 Your university access pass has been generated.
 
@@ -181,6 +191,24 @@ _Please keep this token secure._`;
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="space-y-4"
                 >
+                  <FormField
+                    control={form.control}
+                    name="fullName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full Name</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Enter student's full name"
+                            className="h-12"
+                            autoComplete="off"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="sapId"

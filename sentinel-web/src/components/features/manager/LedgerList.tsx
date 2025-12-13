@@ -91,7 +91,7 @@ export function LedgerList({ entries }: LedgerListProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>SAP ID</TableHead>
+              <TableHead>Student</TableHead>
               <TableHead className="text-right">Time</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
@@ -100,12 +100,16 @@ export function LedgerList({ entries }: LedgerListProps) {
             {entries.data.map((entry) => (
               <TableRow key={entry.id}>
                 <TableCell className="font-medium">
-                  {entry.sapId}
-                  {entry.activationToken && (
-                    <span className="block text-xs text-muted-foreground font-mono mt-0.5">
-                      Token: {entry.activationToken}
+                  <div>
+                    <span className="font-semibold">
+                      {entry.fullName || "Unknown"}
                     </span>
-                  )}
+                    <span className="block text-xs text-muted-foreground font-mono mt-0.5">
+                      {entry.sapId}
+                      {entry.activationToken &&
+                        ` • Token: ${entry.activationToken}`}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground text-sm">
                   {new Date(entry.createdAt).toLocaleTimeString([], {

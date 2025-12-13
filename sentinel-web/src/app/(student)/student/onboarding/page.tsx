@@ -117,21 +117,6 @@ export default function OnboardingPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={onSubmit} className="space-y-6">
-              {/* Full Name */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Full Name</label>
-                <Input
-                  name="fullName"
-                  autoComplete="off"
-                  placeholder="Enter your full name"
-                  required
-                  minLength={3}
-                />
-                <p className="text-xs text-muted-foreground">
-                  As it appears on your university card
-                </p>
-              </div>
-
               {/* CNIC */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">CNIC Number</label>

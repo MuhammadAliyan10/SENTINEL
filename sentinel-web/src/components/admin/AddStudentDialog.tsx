@@ -32,7 +32,7 @@ export function AddStudentDialog({ trigger }: AddStudentDialogProps) {
       fullName: "",
       sapId: "",
       email: "",
-      paymentStatus: false,
+      isPaid: false,
     },
   });
 
@@ -122,7 +122,7 @@ export function AddStudentDialog({ trigger }: AddStudentDialogProps) {
           {/* Payment Status */}
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div className="space-y-0.5">
-              <Label htmlFor="paymentStatus" className="text-base">
+              <Label htmlFor="isPaid" className="text-base">
                 Payment Received
               </Label>
               <p className="text-sm text-muted-foreground">
@@ -130,11 +130,9 @@ export function AddStudentDialog({ trigger }: AddStudentDialogProps) {
               </p>
             </div>
             <Switch
-              id="paymentStatus"
-              checked={form.watch("paymentStatus")}
-              onCheckedChange={(checked) =>
-                form.setValue("paymentStatus", checked)
-              }
+              id="isPaid"
+              checked={form.watch("isPaid")}
+              onCheckedChange={(checked) => form.setValue("isPaid", checked)}
               disabled={isLoading}
             />
           </div>

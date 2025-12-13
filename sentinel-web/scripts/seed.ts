@@ -1,175 +1,111 @@
+import { PrismaClient } from "@prisma/client";
 import { createClient } from "@supabase/supabase-js";
-import { authenticator } from "otplib";
+import crypto from "crypto";
 import dotenv from "dotenv";
-import path from "path";
 
-// Load environment variables from .env.local and .env
-dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+// Load environment variables
+dotenv.config();
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const DATABASE_URL = process.env.DATABASE_URL;
+const prisma = new PrismaClient();
 
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-  console.error(
-    "Error: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required."
-  );
+// Initialize Supabase Admin (Bypasses RLS)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env");
   process.exit(1);
 }
 
-console.log(`Using Supabase URL: ${SUPABASE_URL}`);
-console.log(`Has Service Role Key: ${!!SERVICE_ROLE_KEY}`);
-console.log(`Has Database URL: ${!!DATABASE_URL}`);
-
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
   },
 });
 
-async function seed() {
-  console.log("🌱 Starting database seed...");
+async function main() {
+  console.log("🚀 Starting Sentinel Admin Seeder...");
 
-  // Try a simple health check query
-  try {
-    const { error } = await supabase.from("profiles").select("id").limit(1);
-    if (error) {
-      console.error("Health check failed:", error.message);
-      if (error.message.includes("schema cache")) {
-        console.error(
-          "TIP: The table might not exist or the schema cache is stale."
-        );
-        console.error("If you have a DATABASE_URL, we can try direct SQL.");
-      }
-    } else {
-      console.log("Database connection verified.");
-    }
-  } catch (err) {
-    console.error("Health check error:", err);
+  const ADMIN_EMAIL = "admin@sentinel.edu";
+
+  // 1. Check if user already exists in Prisma
+  const existingUser = await prisma.user.findUnique({
+    where: { sapId: "SUPER-ADMIN" },
+  });
+
+  if (existingUser) {
+    console.log("⚠️  Super Admin already exists in Database.");
+    return;
   }
 
-  const users = [
-    {
-      email: "admin@sentinel.edu",
-      password: "admin123",
-      role: "admin",
-      full_name: "Super Admin",
-      sap_id: "ADMIN001",
-      payment_status: true,
-    },
-    {
-      email: "student.a@university.edu",
-      password: "password123",
-      role: "student",
-      full_name: "Alice Perfect",
-      sap_id: "SAP1001",
-      payment_status: true,
-    },
-    {
-      email: "student.b@university.edu",
-      password: "password123",
-      role: "student",
-      full_name: "Bob Unpaid",
-      sap_id: "SAP1002",
-      payment_status: false,
-    },
-    {
-      email: "student.c@university.edu",
-      password: "password123",
-      role: "student",
-      full_name: "Charlie Existing",
-      sap_id: "SAP1003",
-      payment_status: true,
-      create_log: true,
-    },
-  ];
+  // 2. Generate a High-Entropy Password (16 chars)
+  const password = crypto.randomBytes(12).toString("base64").slice(0, 16) + "!";
 
-  for (const user of users) {
-    console.log(`Processing user: ${user.email}`);
+  // 3. Create User in Supabase Auth
+  console.log("🔐 Creating Supabase Auth User...");
 
-    // 1. Create or Update User in Auth
-    // Note: admin.createUser will fail if user exists, so we try/catch or check first
-    // But listUsers is paginated. A simpler way is to try create, if fail, try update (if needed)
-    // or just list users by email to check existence.
+  // First, try to get the user if they exist in Auth but not DB (Edge case)
+  const {
+    data: { users },
+  } = await supabase.auth.admin.listUsers();
+  const existingAuthUser = users.find((u) => u.email === ADMIN_EMAIL);
 
-    let userId: string | null = null;
+  let authUserId = existingAuthUser?.id;
 
-    const { data: existingUsers } = await supabase.auth.admin.listUsers();
-    const existingUser = existingUsers.users.find(
-      (u) => u.email === user.email
-    );
-
-    if (existingUser) {
-      console.log(`  - User already exists in Auth. Updating password...`);
-      const { data, error } = await supabase.auth.admin.updateUserById(
-        existingUser.id,
-        { password: user.password, email_confirm: true }
-      );
-      if (error) {
-        console.error(`  - Error updating user: ${error.message}`);
-        continue;
-      }
-      userId = existingUser.id;
-    } else {
-      console.log(`  - Creating new user in Auth...`);
-      const { data, error } = await supabase.auth.admin.createUser({
-        email: user.email,
-        password: user.password,
+  if (!existingAuthUser) {
+    const { data: authUser, error: authError } =
+      await supabase.auth.admin.createUser({
+        email: ADMIN_EMAIL,
+        password: password,
         email_confirm: true,
+        user_metadata: { role: "SUPER_ADMIN" },
       });
-      if (error) {
-        console.error(`  - Error creating user: ${error.message}`);
-        continue;
-      }
-      userId = data.user.id;
+
+    if (authError) {
+      console.error("❌ Supabase Auth Error:", authError.message);
+      process.exit(1);
     }
-
-    if (!userId) continue;
-
-    // 2. Create or Update Profile
-    // Generate a TOTP secret
-    const totpSecret = authenticator.generateSecret();
-
-    console.log(`  - Upserting profile...`);
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: userId,
-      full_name: user.full_name,
-      sap_id: user.sap_id,
-      role: user.role,
-      payment_status: user.payment_status,
-      totp_secret: totpSecret,
-      updated_at: new Date().toISOString(),
+    authUserId = authUser.user.id;
+  } else {
+    // If auth user exists, we reset their password to the new generated one
+    await supabase.auth.admin.updateUserById(existingAuthUser.id, {
+      password: password,
     });
-
-    if (profileError) {
-      console.error(`  - Error upserting profile: ${profileError.message}`);
-    } else {
-      console.log(`  - Profile upserted successfully.`);
-    }
-
-    // 3. Create Entry Log for Student C
-    if (user.create_log) {
-      console.log(`  - Creating entry log...`);
-      const { error: logError } = await supabase.from("entry_logs").insert({
-        student_id: userId,
-        scan_type: "entry",
-        timestamp: new Date().toISOString(),
-        status: "valid",
-      });
-      if (logError) {
-        console.error(`  - Error creating entry log: ${logError.message}`);
-      } else {
-        console.log(`  - Entry log created.`);
-      }
-    }
+    console.log("🔄 Updated existing Auth user password.");
   }
 
-  console.log("✅ Seeding complete!");
+  // 4. Create User in Prisma
+  console.log("💾 Seeding Database Record...");
+  await prisma.user.create({
+    data: {
+      id: authUserId!, // Link strict ID
+      sapId: "SUPER-ADMIN",
+      fullName: "System Administrator",
+      role: "SUPER_ADMIN",
+      isActive: true,
+      isPaid: true,
+      profileCompleted: true,
+      // No password hash stored here, Supabase handles it.
+    },
+  });
+
+  // 5. Output Credentials
+  console.log("\n" + "=".repeat(50));
+  console.log("✅  SUPER ADMIN CREATED SUCCESSFULLY");
+  console.log("=".repeat(50));
+  console.log(`📧 Email:    ${ADMIN_EMAIL}`);
+  console.log(`🔑 Password: ${password}`);
+  console.log("=".repeat(50));
+  console.log("⚠️  COPY THIS PASSWORD NOW. IT WILL NOT BE SHOWN AGAIN.");
+  console.log("=".repeat(50) + "\n");
 }
 
-seed().catch((err) => {
-  console.error("Unexpected error during seeding:", err);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error("❌ Seeding Failed:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

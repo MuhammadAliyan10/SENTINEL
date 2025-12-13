@@ -26,18 +26,12 @@ export default function UnauthorizedPage() {
         </CardHeader>
         <CardContent className="text-center space-y-4">
           <p className="text-sm text-muted-foreground">
-            This area is restricted to administrators only. If you believe this
-            is an error, please contact your system administrator.
+            Your account does not have the required privileges to access this
+            area. This attempt has been logged.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <Button asChild variant="default">
-              <Link href="/">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Go Home
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/login">Sign In</Link>
+            <Button asChild variant="default" className="w-full sm:w-auto">
+              <Link href="/login">Return to Login</Link>
             </Button>
           </div>
         </CardContent>

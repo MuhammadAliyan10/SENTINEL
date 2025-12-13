@@ -79,8 +79,8 @@
   --popover: #ffffff;
   --popover-foreground: #0f172a;
 
-  /* Primary - Deep Blue (Professional/Academic) */
-  --primary: #1e40af; /* Blue 800 */
+  /* Primary - Indigo/Violet (Brand Color) */
+  --primary: #4f39f6;
   --primary-foreground: #ffffff;
 
   /* Secondary - Light Gray */
@@ -91,9 +91,9 @@
   --muted: #f8fafc; /* Slate 50 */
   --muted-foreground: #64748b; /* Slate 500 */
 
-  /* Accent - Teal (University feel) */
-  --accent: #f0fdfa; /* Teal 50 */
-  --accent-foreground: #0f766e; /* Teal 700 */
+  /* Accent - Light Indigo (Matches Primary) */
+  --accent: #eef2ff; /* Indigo 50 */
+  --accent-foreground: #4338ca; /* Indigo 700 */
 
   /* Destructive - Red for errors */
   --destructive: #dc2626; /* Red 600 */
@@ -102,28 +102,28 @@
   --border: #e2e8f0; /* Slate 200 */
   --input: #e2e8f0;
 
-  /* Ring - Focus indicator */
-  --ring: #3b82f6; /* Blue 500 */
+  /* Ring - Focus indicator (matches primary) */
+  --ring: #4f39f6;
 
   /* Chart Colors - Professional palette */
-  --chart-1: #3b82f6; /* Blue */
+  --chart-1: #4f39f6; /* Primary Indigo */
   --chart-2: #10b981; /* Emerald */
   --chart-3: #f59e0b; /* Amber */
   --chart-4: #8b5cf6; /* Violet */
   --chart-5: #ec4899; /* Pink */
 
-  /* Sidebar - Clean white with subtle accents */
+  /* Sidebar - Clean white with primary accents */
   --sidebar: #ffffff;
   --sidebar-foreground: #334155;
-  --sidebar-primary: #1e40af;
+  --sidebar-primary: #4f39f6;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: #1e40af;
+  --sidebar-accent-foreground: #4f39f6;
   --sidebar-border: #e2e8f0;
-  --sidebar-ring: #3b82f6;
+  --sidebar-ring: #4f39f6;
 
   /* Sentinel Brand Colors */
-  --sentinel-blue: #1e40af;
+  --sentinel-blue: #4f39f6;
   --sentinel-teal: #0d9488;
   --sentinel-success: #16a34a;
   --sentinel-warning: #d97706;

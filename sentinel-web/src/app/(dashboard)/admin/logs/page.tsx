@@ -13,6 +13,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { requireSuperAdminPage } from "@/lib/auth";
 
 // Mock entry logs data
 const mockLogs = [
@@ -80,7 +81,10 @@ function getStatusBadgeClass(status: string): string {
   }
 }
 
-export default function LogsPage() {
+export default async function LogsPage() {
+  // Defense-in-depth: Explicit auth check
+  await requireSuperAdminPage();
+
   return (
     <div className="space-y-6">
       {/* Page Header */}

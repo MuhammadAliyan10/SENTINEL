@@ -1,16 +1,9 @@
 "use server";
 
-import { authenticator } from "otplib";
 import { revalidatePath } from "next/cache";
-import { createClient, requireAdmin } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/database";
-
-// Configure TOTP authenticator
-authenticator.options = {
-  digits: 6,
-  step: 30,
-  window: 1,
-};
+import { prisma } from "@/lib/prisma";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { requireSuperAdmin } from "@/lib/auth";
 
 // Email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -19,8 +12,9 @@ export interface CreateUserInput {
   fullName: string;
   sapId: string; // 8-digit SAP ID
   email: string;
-  role?: UserRole;
-  paymentStatus?: boolean;
+  section?: string;
+  gender?: "MALE" | "FEMALE" | "OTHER";
+  isPaid?: boolean;
 }
 
 export interface CreateUserResult {
@@ -30,17 +24,24 @@ export interface CreateUserResult {
 }
 
 /**
- * Server Action: Create a new user with auto-generated TOTP secret
- * SECURED: Requires admin authentication
+ * Server Action: Create a new STUDENT user
+ * SECURED: Requires SUPER_ADMIN authentication via Prisma
+ *
+ * Flow:
+ * 1. Verify SUPER_ADMIN role
+ * 2. Validate input
+ * 3. Create user in Supabase Auth (Admin API)
+ * 4. Create user record in Prisma
+ * 5. Log the action
  */
 export async function createUser(
   input: CreateUserInput
 ): Promise<CreateUserResult> {
   try {
     // ============================================
-    // AUTHORIZATION CHECK - Require Admin Role
+    // AUTHORIZATION CHECK - Require SUPER_ADMIN
     // ============================================
-    await requireAdmin();
+    const admin = await requireSuperAdmin();
 
     // ============================================
     // INPUT VALIDATION
@@ -63,18 +64,15 @@ export async function createUser(
       return { success: false, message: "Valid email is required" };
     }
 
-    const supabase = await createClient();
-
     // ============================================
     // CHECK FOR DUPLICATE SAP ID
     // ============================================
-    const { data: existing } = (await supabase
-      .from("profiles")
-      .select("sap_id")
-      .eq("sap_id", input.sapId.trim())
-      .single()) as { data: { sap_id: string } | null };
+    const existingUser = await prisma.user.findUnique({
+      where: { sapId: input.sapId.trim() },
+      select: { id: true },
+    });
 
-    if (existing) {
+    if (existingUser) {
       return {
         success: false,
         message: `SAP ID ${input.sapId} already exists`,
@@ -82,38 +80,67 @@ export async function createUser(
     }
 
     // ============================================
-    // GENERATE SECURE TOTP SECRET
+    // STEP A: Create user in Supabase Auth
     // ============================================
-    const totpSecret = authenticator.generateSecret();
+    const tempPassword = `SENTINEL_${input.sapId}_${Date.now()}`;
+
+    const { data: authData, error: authError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email: input.email.trim(),
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: input.fullName.trim(),
+          sap_id: input.sapId.trim(),
+        },
+      });
+
+    if (authError || !authData.user) {
+      console.error("Supabase Auth Error:", authError);
+      return {
+        success: false,
+        message: authError?.message || "Failed to create auth user",
+      };
+    }
 
     // ============================================
-    // CREATE USER IN SUPABASE AUTH
-    // Note: In production, use supabase.auth.admin.createUser()
-    // This requires a service role key
+    // STEP B: Create user record in Prisma
     // ============================================
+    try {
+      await prisma.user.create({
+        data: {
+          id: authData.user.id,
+          sapId: input.sapId.trim(),
+          fullName: input.fullName.trim(),
+          role: "STUDENT",
+          section: input.section?.trim() || null,
+          gender: input.gender || null,
+          isPaid: input.isPaid ?? false,
+          isActive: true,
+          createdById: admin.id,
+        },
+      });
+    } catch (prismaError) {
+      // Rollback: Delete the Supabase auth user
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      console.error("Prisma Create Error:", prismaError);
+      return {
+        success: false,
+        message: "Failed to create user record",
+      };
+    }
 
-    // For now, we simulate the creation
-    // TODO: Replace with actual Supabase Admin API call
-    // const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    //   email: input.email,
-    //   email_confirm: true,
-    //   user_metadata: { full_name: input.fullName },
-    // });
-    //
-    // if (authError) throw authError;
-    //
-    // // Update the profile with additional fields
-    // const { error: profileError } = await supabase.from("profiles").update({
-    //   sap_id: input.sapId.trim(),
-    //   role: input.role || "student",
-    //   payment_status: input.paymentStatus || false,
-    //   totp_secret: totpSecret,
-    // }).eq("id", authData.user.id);
-    //
-    // if (profileError) throw profileError;
-
-    // Simulate API delay for demo
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    // ============================================
+    // STEP C: Log the action
+    // ============================================
+    await prisma.auditLog.create({
+      data: {
+        action: "USER_CREATED",
+        adminId: admin.id,
+        targetId: authData.user.id,
+        details: `Created student ${input.fullName} (${input.sapId})`,
+      },
+    });
 
     // Revalidate the students page
     revalidatePath("/admin/students");
@@ -121,7 +148,7 @@ export async function createUser(
     return {
       success: true,
       message: `Student "${input.fullName}" created successfully`,
-      userId: "mock-user-id-" + Date.now(),
+      userId: authData.user.id,
     };
   } catch (error) {
     console.error("Error creating user:", error);
@@ -140,7 +167,7 @@ export async function createUser(
 
 /**
  * Server Action: Update user payment status
- * SECURED: Requires admin authentication
+ * SECURED: Requires SUPER_ADMIN authentication
  */
 export async function updatePaymentStatus(
   userId: string,
@@ -150,21 +177,28 @@ export async function updatePaymentStatus(
     // ============================================
     // AUTHORIZATION CHECK
     // ============================================
-    await requireAdmin();
+    const admin = await requireSuperAdmin();
 
     if (!userId) {
       return { success: false, message: "User ID is required" };
     }
 
-    const supabase = await createClient();
+    // Update in Prisma
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { isPaid: paymentStatus },
+      select: { fullName: true, sapId: true },
+    });
 
-    // Update in database
-    const { error } = await supabase
-      .from("profiles")
-      .update({ payment_status: paymentStatus } as never)
-      .eq("id", userId);
-
-    if (error) throw error;
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        action: paymentStatus ? "PAYMENT_MARKED_PAID" : "PAYMENT_MARKED_UNPAID",
+        adminId: admin.id,
+        targetId: userId,
+        details: `Payment status updated for ${updatedUser.fullName} (${updatedUser.sapId})`,
+      },
+    });
 
     revalidatePath("/admin/students");
 
@@ -191,7 +225,7 @@ export async function updatePaymentStatus(
 
 /**
  * Server Action: Delete a user
- * SECURED: Requires admin authentication
+ * SECURED: Requires SUPER_ADMIN authentication
  */
 export async function deleteUser(
   userId: string
@@ -200,20 +234,51 @@ export async function deleteUser(
     // ============================================
     // AUTHORIZATION CHECK
     // ============================================
-    await requireAdmin();
+    const admin = await requireSuperAdmin();
 
     if (!userId) {
       return { success: false, message: "User ID is required" };
     }
 
-    const supabase = await createClient();
+    // Get user info for logging
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { fullName: true, sapId: true, role: true },
+    });
 
-    // Soft delete: Mark as deleted instead of actual deletion
-    // For hard delete, use: supabaseAdmin.auth.admin.deleteUser(userId)
-    // Using actual delete for now since profiles cascade from auth.users
-    const { error } = await supabase.from("profiles").delete().eq("id", userId);
+    if (!user) {
+      return { success: false, message: "User not found" };
+    }
 
-    if (error) throw error;
+    // Prevent deleting other SUPER_ADMINs
+    if (user.role === "SUPER_ADMIN") {
+      return { success: false, message: "Cannot delete SUPER_ADMIN accounts" };
+    }
+
+    // Delete from Prisma first
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+
+    // Delete from Supabase Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
+      userId
+    );
+
+    if (authError) {
+      console.error("Supabase Auth Delete Error:", authError);
+      // User is already deleted from Prisma, log the issue
+    }
+
+    // Log the action
+    await prisma.auditLog.create({
+      data: {
+        action: "USER_DELETED",
+        adminId: admin.id,
+        targetId: null, // User no longer exists
+        details: `Deleted user ${user.fullName} (${user.sapId})`,
+      },
+    });
 
     revalidatePath("/admin/students");
 
@@ -231,55 +296,6 @@ export async function deleteUser(
     return {
       success: false,
       message: error instanceof Error ? error.message : "Failed to delete user",
-    };
-  }
-}
-
-/**
- * Server Action: Regenerate TOTP secret for a user
- * SECURED: Requires admin authentication
- */
-export async function regenerateTotpSecret(
-  userId: string
-): Promise<{ success: boolean; message: string }> {
-  try {
-    // ============================================
-    // AUTHORIZATION CHECK
-    // ============================================
-    await requireAdmin();
-
-    if (!userId) {
-      return { success: false, message: "User ID is required" };
-    }
-
-    const newSecret = authenticator.generateSecret();
-
-    const supabase = await createClient();
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ totp_secret: newSecret } as never)
-      .eq("id", userId);
-
-    if (error) throw error;
-
-    return {
-      success: true,
-      message: "TOTP secret regenerated. User will need to re-sync their pass.",
-    };
-  } catch (error) {
-    console.error("Error regenerating TOTP secret:", error);
-
-    if (error instanceof Error && error.message.includes("required")) {
-      return { success: false, message: error.message };
-    }
-
-    return {
-      success: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "Failed to regenerate TOTP secret",
     };
   }
 }

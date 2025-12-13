@@ -8,8 +8,36 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Check for existing session and redirect if found
+  const supabase = await createClient();
+  const {
+    data: { user: supabaseUser },
+  } = await supabase.auth.getUser();
+
+  if (supabaseUser) {
+    const user = await prisma.user.findUnique({
+      where: { id: supabaseUser.id },
+      select: { role: true },
+    });
+
+    if (user) {
+      switch (user.role) {
+        case "SUPER_ADMIN":
+          redirect("/admin");
+        case "CR":
+        case "GR":
+          redirect("/manager/dashboard");
+        case "STUDENT":
+          redirect("/student");
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
       {/* Hero Section */}

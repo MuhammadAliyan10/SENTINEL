@@ -1,6 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/**
+ * SENTINEL MIDDLEWARE (Edge Runtime)
+ *
+ * IMPORTANT: This middleware runs at the Edge and is intentionally LIGHTWEIGHT.
+ * It only checks for Supabase session existence.
+ *
+ * Heavy operations (Prisma queries, role verification) are done in:
+ * - Layout.tsx (Server Component)
+ * - Server Actions
+ *
+ * This prevents Edge Runtime crashes from Node.js-only APIs like Prisma.
+ */
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -29,7 +41,7 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Get the current user
+  // Refresh session (important for token rotation)
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -37,85 +49,49 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ============================================
-  // AUTHENTICATED USER REDIRECTS (LOGIN PAGE)
-  // ============================================
-  if (user && pathname === "/login") {
-    // Fetch role to determine redirect destination
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile) {
-      if (profile.role === "admin") {
-        return NextResponse.redirect(new URL("/admin", request.url));
-      } else if (profile.role === "student") {
-        return NextResponse.redirect(new URL("/student", request.url));
-      } else if (profile.role === "guard") {
-        // Guards might have a specific dashboard or share admin/student view
-        // For now, redirect to unauthorized or a guard page if it existed
-        // Assuming guards use admin view for now or have no specific home yet
-        return NextResponse.redirect(new URL("/unauthorized", request.url));
-      }
-    }
-  }
-
-  // ============================================
-  // ADMIN ROUTES PROTECTION
+  // ADMIN ROUTES - Session Check Only
+  // Role verification happens in layout.tsx
   // ============================================
   if (pathname.startsWith("/admin")) {
-    // Not logged in -> redirect to login
     if (!user) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
     }
-
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      // If student trying to access admin -> redirect to student home
-      if (profile?.role === "student") {
-        return NextResponse.redirect(new URL("/student", request.url));
-      }
-      // Otherwise -> redirect to unauthorized
-      return NextResponse.redirect(new URL("/unauthorized", request.url));
-    }
+    // Don't check role here - let layout.tsx handle it with Prisma
+    return supabaseResponse;
   }
 
   // ============================================
-  // STUDENT ROUTES PROTECTION
+  // STUDENT ROUTES - Session Check Only
   // ============================================
   if (pathname.startsWith("/student")) {
-    // Not logged in -> redirect to login
     if (!user) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
     }
+    return supabaseResponse;
+  }
 
-    // Verify the user has a profile
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id, role, payment_status")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile) {
-      // No profile -> redirect to login (something is wrong)
-      return NextResponse.redirect(new URL("/login", request.url));
+  // ============================================
+  // GUARD ROUTES - Session Check Only
+  // ============================================
+  if (pathname.startsWith("/guard")) {
+    if (!user) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(loginUrl);
     }
+    return supabaseResponse;
+  }
 
-    // If admin trying to access student view -> redirect to admin dashboard
-    if (profile.role === "admin") {
-      return NextResponse.redirect(new URL("/admin", request.url));
-    }
+  // ============================================
+  // LOGIN PAGE - Redirect if already authenticated
+  // ============================================
+  if (user && pathname === "/login") {
+    // Redirect to root for smart dispatching based on role
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return supabaseResponse;

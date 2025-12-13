@@ -1,3 +1,7 @@
+// --------------------------------------------------------
+// SENTINEL DATABASE SCHEMA (Production Ready)
+// --------------------------------------------------------
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -5,58 +9,135 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-/// User roles in the system
+// --------------------------------------------------------
+// ENUMS (Strict Typing)
+// --------------------------------------------------------
+
 enum UserRole {
-  admin
-  student
-  guard
+  SUPER_ADMIN  // The Boss
+  CR           // Class Rep (Boys)
+  GR           // Girls Rep (Girls)
+  GUARD        // Security Personnel
+  STUDENT      // The Attendee
 }
 
-/// Status of an entry scan
-enum EntryStatus {
-  allowed
-  rejected
-  re_entry @map("re-entry")
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
 }
 
-/// Profile table linked to Supabase Auth
-model Profile {
-  id             String   @id @db.Uuid
-  full_name      String
-  sap_id         String?  @unique
-  role           UserRole @default(student)
-  payment_status Boolean  @default(false)
-  photo_url      String?
-  totp_secret    String
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-
-  // Relations
-  entry_logs EntryLog[]
-
-  @@index([sap_id])
-  @@index([role])
-  @@map("profiles")
+enum ScanStatus {
+  GRANTED      // Green Screen
+  REJECTED     // Red Screen (Unpaid/Banned)
+  DUPLICATE    // Blue Screen (Passback attempt)
 }
 
-/// Log of all gate entries
-model EntryLog {
-  id              String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  student_id      String      @db.Uuid
-  scan_type       String      @default("entry")
-  timestamp       DateTime    @default(now()) @db.Timestamptz(6)
-  status          EntryStatus
-  guard_device_id String?
-  location        String?
-  notes           String?
-  created_at      DateTime    @default(now()) @db.Timestamptz(6)
+// --------------------------------------------------------
+// MODELS
+// --------------------------------------------------------
 
-  // Relations
-  student Profile @relation(fields: [student_id], references: [id], onDelete: Cascade)
+model User {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at") // Soft delete for sync
 
-  @@index([student_id])
-  @@index([timestamp(sort: Desc)])
-  @@map("entry_logs")
+  // --- IDENTITY ---
+  sapId       String  @unique @map("sap_id") // The Primary Identifier (e.g., 70168915)
+  fullName    String? @map("full_name")
+  cnic        String? // Optional initially, mandatory after onboarding
+  phoneNumber String? @map("phone_number")
+  gender      Gender? // Mandatory for lane routing
+
+  // --- AUTHENTICATION & SECURITY ---
+  role            UserRole @default(STUDENT)
+  activationToken String?  @unique @map("activation_token") // The "X7K-9P2" token (Indexed)
+  passwordHash    String?  @map("password_hash") // For Admins/CRs only
+
+  // --- STATUS FLAGS ---
+  isPaid           Boolean @default(false) @map("is_paid")
+  profileCompleted Boolean @default(false) @map("profile_completed")
+  isActive         Boolean @default(true)  @map("is_active") // Admin Kill Switch
+
+  // --- METADATA (For Sorting/Filtering) ---
+  semester String? // e.g., "8"
+  section  String? // e.g., "A"
+  department String? // e.g., "BSCS"
+
+  // --- MEDIA (Compressed URLs) ---
+  profilePhotoUrl    String? @map("profile_photo_url")
+  universityCardUrl  String? @map("university_card_url")
+
+  // --- RELATIONS ---
+
+  // Who created this user? (Financial Audit Trail)
+  // If this is a Student, createdBy points to the CR/GR who took the cash.
+  createdById String? @map("created_by_id")
+  createdBy   User?   @relation("UserCreator", fields: [createdById], references: [id])
+
+  // Who did this user create? (If this user is a CR/GR)
+  createdUsers User[]  @relation("UserCreator")
+
+  // Entry Logs (History of scans)
+  accessLogs AccessLog[]
+
+  // --- INDEXES ---
+  @@index([sapId])
+  @@index([activationToken])
+  @@index([role, section]) // For Admin Reports
+  @@map("users")
+}
+
+model AccessLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+
+  // --- WHO ---
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  // --- RESULT ---
+  status ScanStatus
+
+  // --- CONTEXT ---
+  scannerDeviceId String? @map("scanner_device_id") // To identify which phone scanned
+  gateNumber      String? @map("gate_number")       // "Gate 1", "Female Lane"
+
+  // --- METADATA ---
+  metadata Json? // Store extra debug info if needed
+
+  @@index([userId])
+  @@index([timestamp]) // For "Live Dashboard" queries
+  @@map("access_logs")
+}
+
+// --------------------------------------------------------
+// AUDIT LOG (For Admin Actions)
+// --------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  adminId   String   @map("admin_id") // Who did it?
+  action    String   // "REVOKE_ACCESS", "FREEZE_CR", "MANUAL_ENTRY"
+  targetId  String?  @map("target_id") // Who was affected?
+  details   String?
+
+  @@map("audit_logs")
+}
+
+// --------------------------------------------------------
+// SYSTEM SETTINGS (Dynamic Config)
+// --------------------------------------------------------
+
+model SystemSettings {
+  key   String @id
+  value String
+
+  @@map("system_settings")
 }

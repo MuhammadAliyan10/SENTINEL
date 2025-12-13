@@ -12,6 +12,8 @@ import {
   ChevronUp,
   Radio,
   Upload,
+  UserCog,
+  FileSearch,
 } from "lucide-react";
 import {
   Sidebar,
@@ -33,6 +35,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
+
+interface AdminUser {
+  id: string;
+  sapId: string;
+  fullName: string | null;
+  role: string;
+}
+
+interface AdminSidebarProps {
+  user: AdminUser;
+}
 
 const navItems = [
   {
@@ -41,9 +56,9 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    title: "Live Monitor",
-    href: "/admin/live",
-    icon: Radio,
+    title: "Managers",
+    href: "/admin/managers",
+    icon: UserCog,
   },
   {
     title: "Students",
@@ -56,9 +71,9 @@ const navItems = [
     icon: Upload,
   },
   {
-    title: "Scan Logs",
-    href: "/admin/logs",
-    icon: Activity,
+    title: "Audit Logs",
+    href: "/admin/audit",
+    icon: FileSearch,
   },
   {
     title: "Settings",
@@ -67,8 +82,26 @@ const navItems = [
   },
 ];
 
-export function AdminSidebar() {
+export function AdminSidebar({ user }: AdminSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    // Force full reload to clear all cached state
+    window.location.href = "/login";
+  };
+
+  const getInitials = (name: string | null): string => {
+    if (!name) return "AD";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   return (
     <Sidebar>
@@ -84,7 +117,7 @@ export function AdminSidebar() {
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">Sentinel</span>
                   <span className="truncate text-xs text-muted-foreground">
-                    Admin Portal
+                    Super Admin
                   </span>
                 </div>
               </Link>
@@ -133,13 +166,15 @@ export function AdminSidebar() {
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage src="/avatars/admin.png" alt="Admin" />
                     <AvatarFallback className="rounded-lg bg-primary text-primary-foreground">
-                      AD
+                      {getInitials(user.fullName)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">Admin User</span>
+                    <span className="truncate font-semibold">
+                      {user.fullName || "Super Admin"}
+                    </span>
                     <span className="truncate text-xs text-muted-foreground">
-                      admin@university.edu
+                      {user.role}
                     </span>
                   </div>
                   <ChevronUp className="ml-auto size-4" />
@@ -156,7 +191,10 @@ export function AdminSidebar() {
                   Profile Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive focus:text-destructive">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                  onClick={handleSignOut}
+                >
                   <LogOut className="mr-2 size-4" />
                   Sign Out
                 </DropdownMenuItem>

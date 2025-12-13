@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Shield, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
+import { getUserRole } from "@/actions/auth";
 
 function LoginForm() {
   const router = useRouter();
@@ -53,38 +54,40 @@ function LoginForm() {
         throw new Error("Authentication failed");
       }
 
-      // 2. Check User Role
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", authData.user.id)
-        .single();
+      // 2. Check User Role (Server-Side Source of Truth)
+      const role = await getUserRole();
 
-      if (profileError || !profile) {
-        throw new Error("User profile not found");
+      if (!role) {
+        throw new Error("User profile not found in database");
       }
 
       toast.success("Signed in successfully");
 
       // 3. Redirect based on role
-      if (profile.role === "admin") {
-        router.push(
-          redirectPath?.startsWith("/admin") ? redirectPath : "/admin"
-        );
-      } else if (profile.role === "student") {
-        router.push(
-          redirectPath?.startsWith("/student") ? redirectPath : "/student"
-        );
-      } else if (profile.role === "guard") {
-        // Guards currently don't have a dedicated dashboard in this spec
-        // Redirecting to unauthorized or a guard landing would be appropriate
-        // For now, let's assume they might use a guard view if it existed
-        // Or we can just show an error if guards aren't supported yet
-        setError("Guard portal access is not yet available on this device.");
-        await supabase.auth.signOut();
-      } else {
-        setError("Unauthorized role");
-        await supabase.auth.signOut();
+      switch (role) {
+        case "SUPER_ADMIN":
+          router.push(
+            redirectPath?.startsWith("/admin") ? redirectPath : "/admin"
+          );
+          break;
+        case "CR":
+        case "GR":
+          router.push(
+            redirectPath?.startsWith("/manager")
+              ? redirectPath
+              : "/manager/dashboard"
+          );
+          break;
+        case "STUDENT":
+          router.push(
+            redirectPath?.startsWith("/student")
+              ? redirectPath
+              : "/student/dashboard"
+          );
+          break;
+        default:
+          setError("Unauthorized role");
+          await supabase.auth.signOut();
       }
     } catch (err) {
       console.error("Login error:", err);

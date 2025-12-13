@@ -10,6 +10,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { REGEXP_ONLY_DIGITS_AND_CHARS } from "input-otp";
 import { Ticket, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -145,6 +146,7 @@ function StudentLoginForm() {
               <InputOTP
                 maxLength={6}
                 value={token}
+                pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
                 onChange={(value) => setToken(value.toUpperCase())}
               >
                 <InputOTPGroup className="gap-2">

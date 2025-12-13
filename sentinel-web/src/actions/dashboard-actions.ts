@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
 import { getTicketPrice } from "./settings-actions";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/actions/auth-actions";
 
 // ============================================
 // TYPES

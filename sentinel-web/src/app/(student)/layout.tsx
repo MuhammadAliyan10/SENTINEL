@@ -1,8 +1,6 @@
-import { getUserRole } from "@/actions/auth-actions";
+import { getStudentAuth } from "@/actions/auth-actions";
 import { redirect } from "next/navigation";
 import StudentBottomNav from "@/components/features/student/StudentBottomNav";
-import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
 import { headers } from "next/headers";
 
 export default async function StudentLayout({
@@ -10,47 +8,28 @@ export default async function StudentLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const role = await getUserRole();
+  // Single optimized auth call
+  const auth = await getStudentAuth();
 
-  if (role !== "STUDENT") {
+  if (!auth) {
     redirect("/unauthorized");
   }
 
-  // Check Profile Completion
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Get current pathname from headers
+  const headersList = await headers();
+  const pathname =
+    headersList.get("x-pathname") || headersList.get("x-invoke-path") || "";
 
-  let isOnOnboarding = false;
+  const isOnOnboarding = pathname.includes("/onboarding");
 
-  if (user) {
-    const dbUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { profileCompleted: true },
-    });
+  // If profile NOT completed, force to onboarding (unless already there)
+  if (!auth.profileCompleted && !isOnOnboarding) {
+    redirect("/student/onboarding");
+  }
 
-    // Get current pathname from next/headers
-    const headersList = await headers();
-    // Try multiple sources for the pathname
-    const pathname =
-      headersList.get("x-pathname") ||
-      headersList.get("x-invoke-path") ||
-      headersList.get("x-url") ||
-      "";
-
-    // Check if we're on the onboarding page
-    isOnOnboarding = pathname.includes("/onboarding");
-
-    // If profile NOT completed, force to onboarding (unless already there)
-    if (!dbUser?.profileCompleted && !isOnOnboarding) {
-      redirect("/student/onboarding");
-    }
-
-    // If profile IS completed, block access to onboarding
-    if (dbUser?.profileCompleted && isOnOnboarding) {
-      redirect("/student/dashboard");
-    }
+  // If profile IS completed, block access to onboarding
+  if (auth.profileCompleted && isOnOnboarding) {
+    redirect("/student/dashboard");
   }
 
   return (

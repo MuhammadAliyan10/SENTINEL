@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/actions/auth-actions";
 import { z } from "zod";
 
 // ============================================

@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { createHmac } from "crypto";
 import { z } from "zod";
 
@@ -78,9 +78,49 @@ export async function completeProfile(formData: FormData) {
 }
 
 /**
+ * Cached student data fetch - reduces DB load under high concurrency
+ * Cache TTL: 30 seconds
+ */
+const getCachedStudentData = (userId: string) =>
+  unstable_cache(
+    async () => {
+      return prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          fullName: true,
+          sapId: true,
+          profilePhotoUrl: true,
+          universityCardUrl: true,
+          gender: true,
+          section: true,
+          semester: true,
+          department: true,
+          phoneNumber: true,
+          cnic: true,
+          activationToken: true, // Needed for QR signing (server-side only)
+          profileCompleted: true,
+          isActive: true,
+          isPaid: true,
+          createdAt: true,
+          createdBy: {
+            select: {
+              fullName: true,
+              role: true,
+            },
+          },
+        },
+      });
+    },
+    [`student-data-${userId}`],
+    { revalidate: 30, tags: [`student-${userId}`] }
+  );
+
+/**
  * Get ticket data for student dashboard
- * SECURITY FIX: Uses activationToken for QR signing (not service role key)
- * SECURITY FIX: Does NOT return activationToken to client
+ * PERFORMANCE: Uses cached student data (30s TTL)
+ * SECURITY: Uses activationToken for QR signing (not service role key)
+ * SECURITY: Does NOT return activationToken to client
  */
 export async function getTicketData() {
   const supabase = await createClient();
@@ -90,41 +130,15 @@ export async function getTicketData() {
 
   if (!user) redirect("/login");
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      id: true,
-      fullName: true,
-      sapId: true,
-      profilePhotoUrl: true,
-      universityCardUrl: true,
-      gender: true,
-      section: true,
-      semester: true,
-      department: true,
-      phoneNumber: true,
-      cnic: true,
-      activationToken: true, // Needed for QR signing (server-side only)
-      profileCompleted: true,
-      isActive: true,
-      isPaid: true,
-      createdAt: true,
-      createdBy: {
-        select: {
-          fullName: true,
-          role: true,
-        },
-      },
-    },
-  });
+  // Use cached data for better performance under load
+  const dbUser = await getCachedStudentData(user.id)();
 
   if (!dbUser) redirect("/login");
   if (!dbUser.isActive) redirect("/unauthorized?reason=revoked");
   if (!dbUser.isPaid) redirect("/student/payment-required");
   if (!dbUser.profileCompleted) redirect("/student/onboarding");
 
-  // SECURITY FIX: Generate QR using activationToken (not service role key)
-  // QR format is consistent with DigitalPass component
+  // Generate fresh QR code with current timestamp (not cached)
   const timestamp = Date.now();
   const payloadString = `${dbUser.sapId}:${timestamp}`;
 
@@ -152,4 +166,11 @@ export async function getTicketData() {
     qrCode,
     timestamp,
   };
+}
+
+/**
+ * Invalidate student cache when data changes
+ */
+export async function invalidateStudentCache(userId: string) {
+  revalidatePath("/student/dashboard");
 }

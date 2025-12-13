@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireSuperAdmin as requireSuperAdminAuth } from "@/lib/auth";
+import { requireSuperAdmin as requireSuperAdminAuth } from "@/actions/auth-actions";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 

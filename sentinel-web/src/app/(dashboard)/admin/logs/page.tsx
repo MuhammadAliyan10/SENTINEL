@@ -13,7 +13,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { requireSuperAdminPage } from "@/lib/auth";
+import { requireSuperAdminPage } from "@/actions/auth-actions";
 
 // Mock entry logs data
 const mockLogs = [

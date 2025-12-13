@@ -1,4 +1,4 @@
-import { requireSuperAdminPage } from "@/lib/auth";
+import { requireSuperAdminPage } from "@/actions/auth-actions";
 import { LiveDashboardClient } from "./LiveDashboardClient";
 
 /**

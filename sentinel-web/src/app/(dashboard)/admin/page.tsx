@@ -33,7 +33,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/actions/auth-actions";
 
 // ... imports ...
 
@@ -131,18 +131,22 @@ export default async function AdminDashboard() {
       </div>
 
       <Tabs defaultValue="overview" className="flex h-full flex-col">
-        <TabsList className="mb-6 h-auto w-full rounded-none justify-start gap-6 border-b bg-transparent p-0">
+        <TabsList className="mb-6 h-auto w-full rounded-none justify-start gap-2 md:gap-6 border-b bg-transparent p-0 overflow-x-auto">
           <TabsTrigger
             value="overview"
-            className="relative gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+            className="relative gap-1.5 md:gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 text-sm md:text-base whitespace-nowrap data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
           >
-            <LayoutDashboard className="h-4 w-4" /> Overview
+            <LayoutDashboard className="h-4 w-4" />
+            <span className="hidden sm:inline">Overview</span>
+            <span className="sm:hidden">Home</span>
           </TabsTrigger>
           <TabsTrigger
             value="activity"
-            className="relative gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+            className="relative gap-1.5 md:gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 text-sm md:text-base whitespace-nowrap data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
           >
-            <Activity className="h-4 w-4" /> Recent Activity
+            <Activity className="h-4 w-4" />
+            <span className="hidden sm:inline">Recent Activity</span>
+            <span className="sm:hidden">Activity</span>
           </TabsTrigger>
         </TabsList>
 

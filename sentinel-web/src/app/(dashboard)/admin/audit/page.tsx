@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireSuperAdminPage } from "@/lib/auth";
+import { requireSuperAdminPage } from "@/actions/auth-actions";
 import { UserRole } from "@prisma/client";
 import {
   Card,
@@ -190,80 +190,96 @@ export default async function AuditPage({ searchParams }: PageProps) {
               <p>No managers found</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50">
-                  <TableHead className="font-semibold">Section</TableHead>
-                  <TableHead className="font-semibold">Manager</TableHead>
-                  <TableHead className="font-semibold">Role</TableHead>
-                  <TableHead className="text-right font-semibold">
-                    Students
-                  </TableHead>
-                  <TableHead className="text-right font-semibold">
-                    Cash (Rs.)
-                  </TableHead>
-                  <TableHead className="text-center font-semibold">
-                    Status
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {managers.map((manager) => {
-                  const cashAmount = manager._count.createdUsers * 2000;
-                  return (
-                    <TableRow
-                      key={manager.id}
-                      className={
-                        !manager.isActive ? "opacity-50 bg-slate-50" : ""
-                      }
-                    >
-                      <TableCell className="font-mono font-medium">
-                        {manager.section || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <span className="font-medium">
-                            {manager.fullName || "Unnamed"}
-                          </span>
-                          <span className="block text-xs text-muted-foreground font-mono">
-                            {manager.sapId}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={
-                            manager.role === "CR"
-                              ? "bg-primary/10 text-primary border-primary/20"
-                              : "bg-pink-50 text-pink-700 border-pink-200"
-                          }
-                        >
-                          {manager.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-lg">
-                        {manager._count.createdUsers}
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold text-lg">
-                        {cashAmount.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {manager.isActive ? (
-                          <Badge className="bg-green-100 text-green-700 border-green-200">
-                            Active
+            <div className="overflow-x-auto -mx-6 px-6">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="font-semibold">Section</TableHead>
+                    <TableHead className="font-semibold">Manager</TableHead>
+                    <TableHead className="font-semibold hidden sm:table-cell">
+                      Role
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">
+                      Students
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">
+                      Cash (Rs.)
+                    </TableHead>
+                    <TableHead className="text-center font-semibold hidden md:table-cell">
+                      Status
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {managers.map((manager) => {
+                    const cashAmount = manager._count.createdUsers * 2000;
+                    return (
+                      <TableRow
+                        key={manager.id}
+                        className={
+                          !manager.isActive ? "opacity-50 bg-slate-50" : ""
+                        }
+                      >
+                        <TableCell className="font-mono font-medium">
+                          {manager.section || "—"}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <span className="font-medium">
+                              {manager.fullName || "Unnamed"}
+                            </span>
+                            <span className="block text-xs text-muted-foreground font-mono">
+                              {manager.sapId}
+                            </span>
+                            <span className="sm:hidden">
+                              <Badge
+                                variant="outline"
+                                className={
+                                  manager.role === "CR"
+                                    ? "bg-primary/10 text-primary border-primary/20 mt-1"
+                                    : "bg-pink-50 text-pink-700 border-pink-200 mt-1"
+                                }
+                              >
+                                {manager.role}
+                              </Badge>
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <Badge
+                            variant="outline"
+                            className={
+                              manager.role === "CR"
+                                ? "bg-primary/10 text-primary border-primary/20"
+                                : "bg-pink-50 text-pink-700 border-pink-200"
+                            }
+                          >
+                            {manager.role}
                           </Badge>
-                        ) : (
-                          <Badge className="bg-red-100 text-red-700 border-red-200">
-                            Frozen
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-lg">
+                          {manager._count.createdUsers}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold text-lg">
+                          {cashAmount.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center hidden md:table-cell">
+                          {manager.isActive ? (
+                            <Badge className="bg-green-100 text-green-700 border-green-200">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-100 text-red-700 border-red-200">
+                              Frozen
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
 

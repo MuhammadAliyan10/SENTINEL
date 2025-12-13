@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Users,
   Settings,
-  Shield,
   LogOut,
   ChevronUp,
   Upload,
@@ -105,8 +104,12 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
           <SidebarMenuItem>
             <SidebarMenuButton size="sm" asChild>
               <Link href="/admin">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent-foreground text-sidebar-primary-foreground">
-                  <Shield className="size-3" />
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden bg-white">
+                  <img
+                    src="/UniversityLogo.jpeg"
+                    alt="Logo"
+                    className="size-7 object-contain"
+                  />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-semibold">Sentinel</span>

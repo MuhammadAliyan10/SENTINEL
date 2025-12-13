@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/actions/auth-actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CSVStudentRow, BulkImportResult } from "@/types/database";
 import { randomBytes } from "crypto";

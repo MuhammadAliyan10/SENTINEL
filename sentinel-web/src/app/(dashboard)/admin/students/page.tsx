@@ -20,7 +20,7 @@ interface PageProps {
   }>;
 }
 
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/actions/auth-actions";
 
 // ... imports ...
 
@@ -57,24 +57,30 @@ export default async function StudentsPage({ searchParams }: PageProps) {
       </div>
 
       <Tabs defaultValue={defaultTab} className="space-y-6">
-        <TabsList className="mb-6 h-auto w-full rounded-none justify-start gap-6 border-b bg-transparent p-0">
+        <TabsList className="mb-6 h-auto w-full rounded-none justify-start gap-2 md:gap-6 border-b bg-transparent p-0 overflow-x-auto">
           <TabsTrigger
             value="overview"
-            className="relative gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+            className="relative gap-1.5 md:gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 text-sm md:text-base whitespace-nowrap data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
           >
-            <LayoutDashboard className="h-4 w-4" /> Overview
+            <LayoutDashboard className="h-4 w-4" />
+            <span className="hidden sm:inline">Overview</span>
+            <span className="sm:hidden">Stats</span>
           </TabsTrigger>
           <TabsTrigger
             value="directory"
-            className="relative gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+            className="relative gap-1.5 md:gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 text-sm md:text-base whitespace-nowrap data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
           >
-            <Users className="h-4 w-4" /> Directory
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Directory</span>
+            <span className="sm:hidden">All</span>
           </TabsTrigger>
           <TabsTrigger
             value="search"
-            className="relative gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+            className="relative gap-1.5 md:gap-2 rounded-none border-b-2 border-transparent pb-3 pt-0 text-sm md:text-base whitespace-nowrap data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
           >
-            <Search className="h-4 w-4" /> Search Console
+            <Search className="h-4 w-4" />
+            <span className="hidden sm:inline">Search Console</span>
+            <span className="sm:hidden">Search</span>
           </TabsTrigger>
         </TabsList>
 

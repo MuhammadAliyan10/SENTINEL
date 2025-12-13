@@ -1,6 +1,5 @@
+import { getManagerAuth } from "@/actions/auth-actions";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { createClient } from "@/lib/supabase/server";
 import { ManagerBottomNav } from "@/components/features/manager/ManagerBottomNav";
 import { ManagerTopNav } from "@/components/features/manager/ManagerTopNav";
 
@@ -9,25 +8,10 @@ export default async function ManagerLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user: supabaseUser },
-  } = await supabase.auth.getUser();
+  // Single optimized auth call
+  const auth = await getManagerAuth();
 
-  if (!supabaseUser) {
-    redirect("/manager/login");
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: supabaseUser.id },
-    select: { role: true, isActive: true },
-  });
-
-  if (!user || !user.isActive) {
-    redirect("/unauthorized");
-  }
-
-  if (user.role !== "CR" && user.role !== "GR" && user.role !== "SUPER_ADMIN") {
+  if (!auth) {
     redirect("/manager/login");
   }
 

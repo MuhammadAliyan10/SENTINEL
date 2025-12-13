@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/actions/auth-actions";
 import { createManagerSchema, type CreateManagerInput } from "@/lib/schemas";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";

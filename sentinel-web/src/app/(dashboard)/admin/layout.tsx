@@ -61,13 +61,13 @@ export default async function AdminLayout({
     <SidebarProvider>
       <AdminSidebar user={user} />
       <SidebarInset>
+        {/* Mobile Header with Sidebar Trigger */}
+        <div className="sticky top-0 z-40 flex items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3 md:hidden">
+          <SidebarTrigger className="h-9 w-9" />
+          <span className="font-semibold text-foreground">Admin Panel</span>
+        </div>
         {/* Page Content */}
-        <main className="flex-1 p-6 lg:p-8 bg-slate-50 relative">
-          <div className="absolute top-4 left-4 z-50 md:hidden">
-            <SidebarTrigger />
-          </div>
-          {children}
-        </main>
+        <main className="flex-1 p-4 md:p-6 lg:p-8 bg-slate-50">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -6,7 +6,7 @@ import { ManagersTableClient } from "./ManagersTableClient";
 import { CreateManagerDialog } from "@/components/features/admin/CreateManagerDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { UserCog, DollarSign, Users, Upload } from "lucide-react";
+import { UserCog, DollarSign, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Prisma, UserRole } from "@prisma/client";
 
@@ -28,7 +28,7 @@ interface PageProps {
 // AUTH CHECK
 // ============================================
 
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/actions/auth-actions";
 
 // ... imports ...
 
@@ -219,10 +219,6 @@ async function ManagersData({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2">
-              <Upload className="h-4 w-4" />
-              Import CSV
-            </Button>
             <CreateManagerDialog />
           </div>
         </CardHeader>

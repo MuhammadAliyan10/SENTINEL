@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin } from "@/actions/auth-actions";
 import { getAllEvents } from "@/actions/settings-actions";
 import { TicketPricingCard } from "@/components/features/admin/settings/TicketPricingCard";
 import { EventsManager } from "@/components/features/admin/settings/EventsManager";

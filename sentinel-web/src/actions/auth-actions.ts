@@ -2,25 +2,43 @@
 
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
+import { cache } from "react";
 
 /**
- * Get the role of the current authenticated user
- * Returns null if not authenticated or account is inactive
+ * Cached auth context - prevents duplicate calls within same request
  */
-export async function getUserRole() {
+const getAuthContext = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return null;
+    return { user: null, dbUser: null };
   }
 
   const dbUser = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { role: true, isActive: true },
+    select: {
+      id: true,
+      role: true,
+      isActive: true,
+      profileCompleted: true,
+      fullName: true,
+      sapId: true,
+    },
   });
+
+  return { user, dbUser };
+});
+
+/**
+ * Get the role of the current authenticated user
+ * Returns null if not authenticated or account is inactive
+ */
+export async function getUserRole() {
+  const { dbUser } = await getAuthContext();
 
   if (!dbUser || !dbUser.isActive) {
     return null;
@@ -29,7 +47,50 @@ export async function getUserRole() {
   return dbUser.role;
 }
 
-import { headers } from "next/headers";
+/**
+ * Student-specific auth check
+ */
+export async function getStudentAuth() {
+  const { user, dbUser } = await getAuthContext();
+
+  if (!user || !dbUser) {
+    return null;
+  }
+
+  if (dbUser.role !== "STUDENT" || !dbUser.isActive) {
+    return null;
+  }
+
+  return {
+    userId: user.id,
+    role: dbUser.role,
+    profileCompleted: dbUser.profileCompleted,
+    fullName: dbUser.fullName,
+    sapId: dbUser.sapId,
+  };
+}
+
+/**
+ * Manager-specific auth check
+ */
+export async function getManagerAuth() {
+  const { user, dbUser } = await getAuthContext();
+
+  if (!user || !dbUser) {
+    return null;
+  }
+
+  const validRoles = ["CR", "GR", "SUPER_ADMIN"];
+  if (!validRoles.includes(dbUser.role) || !dbUser.isActive) {
+    return null;
+  }
+
+  return {
+    userId: user.id,
+    role: dbUser.role,
+    fullName: dbUser.fullName,
+  };
+}
 
 /**
  * Log a successful admin/manager login
@@ -58,17 +119,54 @@ export async function logSuccessfulLogin(userId: string, role: string) {
 
 /**
  * Log a failed login attempt
- * Note: For failed logins where we have no user, we use console.warn
- * since AuditLog requires a performerId. Consider adding a separate
- * SecurityLog table for anonymous events in future.
  */
 export async function logFailedLogin(email: string, reason: string) {
-  // Since AuditLog requires a performerId and we don't have one for failed logins,
-  // we log to console. For production, consider:
-  // 1. A separate SecurityLog table with optional performer
-  // 2. An external logging service (DataDog, Sentry, etc.)
   console.warn(`[SECURITY] Failed login attempt for ${email}: ${reason}`);
+}
 
-  // Future: Could check if email exists and log with their ID
-  // But that would leak information about valid emails
+/**
+ * Require SUPER_ADMIN role - throws if not authorized
+ * Returns the admin user data
+ */
+export async function requireSuperAdmin() {
+  const { user, dbUser } = await getAuthContext();
+
+  if (!user || !dbUser) {
+    throw new Error("Authentication required");
+  }
+
+  if (dbUser.role !== "SUPER_ADMIN" || !dbUser.isActive) {
+    throw new Error("SUPER_ADMIN role required");
+  }
+
+  return {
+    id: dbUser.id,
+    role: dbUser.role,
+    fullName: dbUser.fullName,
+  };
+}
+
+/**
+ * Require SUPER_ADMIN for page access - redirects if not authorized
+ */
+export async function requireSuperAdminPage() {
+  const { user, dbUser } = await getAuthContext();
+
+  if (!user || !dbUser) {
+    const { redirect } = await import("next/navigation");
+    redirect("/admin/login");
+    return null as never; // TypeScript: redirect never returns
+  }
+
+  if (dbUser.role !== "SUPER_ADMIN" || !dbUser.isActive) {
+    const { redirect } = await import("next/navigation");
+    redirect("/unauthorized");
+    return null as never;
+  }
+
+  return {
+    id: dbUser.id,
+    role: dbUser.role,
+    fullName: dbUser.fullName,
+  };
 }

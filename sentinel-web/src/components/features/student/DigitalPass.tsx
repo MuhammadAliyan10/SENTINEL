@@ -181,7 +181,12 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
         const logData = data as { type: string; timestamp: string };
         if (logData.type === "ENTRY") {
           setAccessState("INSIDE");
-          setLastEntry(new Date(logData.timestamp));
+          // Ensure timestamp is interpreted as UTC (append Z if missing)
+          const ts =
+            logData.timestamp.endsWith("Z") || logData.timestamp.includes("+")
+              ? logData.timestamp
+              : logData.timestamp + "Z";
+          setLastEntry(new Date(ts));
           setIsFlipped(true); // Auto-flip to show approved stamp
         } else {
           setAccessState("OUTSIDE");
@@ -213,7 +218,12 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
           const newLog = payload.new as { type: string; timestamp: string };
           if (newLog.type === "ENTRY") {
             setAccessState("INSIDE");
-            setLastEntry(new Date(newLog.timestamp));
+            // Ensure timestamp is interpreted as UTC (append Z if missing)
+            const ts =
+              newLog.timestamp.endsWith("Z") || newLog.timestamp.includes("+")
+                ? newLog.timestamp
+                : newLog.timestamp + "Z";
+            setLastEntry(new Date(ts));
             setHasEnteredBefore(true);
             setIsFlipped(true); // Auto-flip to show approved stamp
           } else if (newLog.type === "EXIT") {

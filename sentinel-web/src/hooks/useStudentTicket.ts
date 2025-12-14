@@ -26,6 +26,7 @@ export interface QRPayload {
 
 /**
  * Fetches student profile information
+ * Profile data is cached for 1 hour since it rarely changes
  */
 export function useStudentProfile() {
   return useQuery<StudentProfile>({
@@ -37,7 +38,8 @@ export function useStudentProfile() {
       }
       return response.json();
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 1000 * 60 * 60, // 1 Hour - profile data rarely changes
+    gcTime: 1000 * 60 * 60 * 24, // Keep in cache for 24 hours
   });
 }
 

@@ -20,14 +20,20 @@ async function getDashboardData() {
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
 
-  // Get event settings
-  const event = await prisma.event.findFirst({
-    where: { status: { in: ["PUBLISHED", "ACTIVE"] } },
-    select: { maxCapacity: true, ticketPrice: true },
-  });
+  // Get event settings (active event by isDefault flag)
+  const [event, ticketPrice] = await Promise.all([
+    prisma.event.findFirst({
+      where: { isDefault: true },
+      select: { maxCapacity: true, ticketPrice: true },
+    }),
+    // Use centralized getTicketPrice for consistency
+    (async () => {
+      const { getTicketPrice } = await import("@/actions/settings-actions");
+      return getTicketPrice();
+    })(),
+  ]);
 
   const maxCapacity = event?.maxCapacity || 800;
-  const ticketPrice = event?.ticketPrice || 3000;
 
   // Parallel queries for performance
   const [

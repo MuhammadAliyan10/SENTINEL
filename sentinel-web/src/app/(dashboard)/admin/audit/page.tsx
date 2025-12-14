@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdminPage } from "@/actions/auth-actions";
+import { getTicketPrice } from "@/actions/settings-actions";
 import { UserRole } from "@prisma/client";
 import {
   Card,
@@ -86,7 +87,10 @@ async function getAuditData(page: number) {
     ]);
 
   const totalStudents = studentAggregates._count.id;
-  const totalCash = totalStudents * 2000;
+
+  // Use dynamic ticket price instead of hardcoded 2000
+  const ticketPrice = await getTicketPrice();
+  const totalCash = totalStudents * ticketPrice;
   const activeManagers = activeCount;
   const frozenManagers = frozenCount;
   const totalManagers = activeManagers + frozenManagers;
@@ -99,6 +103,7 @@ async function getAuditData(page: number) {
     pageCount,
     totalStudents,
     totalCash,
+    ticketPrice,
     activeManagers,
     totalManagers,
   };
@@ -113,6 +118,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
     pageCount,
     totalStudents,
     totalCash,
+    ticketPrice,
     activeManagers,
     totalManagers,
   } = await getAuditData(page);
@@ -212,7 +218,8 @@ export default async function AuditPage({ searchParams }: PageProps) {
                 </TableHeader>
                 <TableBody>
                   {managers.map((manager) => {
-                    const cashAmount = manager._count.createdUsers * 2000;
+                    const cashAmount =
+                      manager._count.createdUsers * ticketPrice;
                     return (
                       <TableRow
                         key={manager.id}
@@ -334,7 +341,8 @@ export default async function AuditPage({ searchParams }: PageProps) {
           <CardFooter className="bg-slate-50 border-t border-border">
             <div className="w-full flex justify-between items-center">
               <span className="text-sm text-muted-foreground">
-                {totalManagers} managers × students × Rs. 2,000
+                {totalManagers} managers × students × Rs.{" "}
+                {ticketPrice.toLocaleString()}
               </span>
               <div className="text-right">
                 <span className="text-sm text-muted-foreground">

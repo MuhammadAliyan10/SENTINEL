@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { UserCog, DollarSign, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Prisma, UserRole } from "@prisma/client";
+import { getTicketPrice } from "@/actions/settings-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +101,10 @@ async function getManagersData(page: number, limit: number, search?: string) {
   const frozenManagers = frozenCount;
   const totalManagers = activeManagers + frozenManagers;
   const totalStudents = studentAggregate._count.id;
-  const totalCash = totalStudents * 2000;
+
+  // Use dynamic ticket price instead of hardcoded 2000
+  const ticketPrice = await getTicketPrice();
+  const totalCash = totalStudents * ticketPrice;
 
   // Transform data for table
   const tableData = managers.map((m) => ({
@@ -113,7 +117,7 @@ async function getManagersData(page: number, limit: number, search?: string) {
     isActive: m.isActive,
     createdAt: m.createdAt,
     studentsCount: m._count.createdUsers,
-    cashLiability: m._count.createdUsers * 2000,
+    cashLiability: m._count.createdUsers * ticketPrice,
   }));
 
   const pageCount = Math.ceil(total / limit);
@@ -127,6 +131,7 @@ async function getManagersData(page: number, limit: number, search?: string) {
       activeManagers,
       totalStudents,
       totalCash,
+      ticketPrice,
     },
   };
 }
@@ -203,7 +208,7 @@ async function ManagersData({
               Rs. {stats.totalCash.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">
-              @ Rs. 2,000 per student
+              @ Rs. {stats.ticketPrice.toLocaleString()} per student
             </p>
           </CardContent>
         </Card>

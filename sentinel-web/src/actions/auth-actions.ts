@@ -262,18 +262,11 @@ export async function loginAdmin(formData: FormData) {
       });
 
     if (authError) {
-      // Log failed attempt for rate limiting
-      await prisma.auditLog.create({
-        data: {
-          performerId: "00000000-0000-0000-0000-000000000000", // System user
-          action: "LOGIN_FAILED_ADMIN",
-          details: JSON.stringify({
-            email: sanitizedEmail,
-            reason: authError.message,
-            timestamp: new Date().toISOString(),
-          }),
-        },
-      });
+      // For pre-auth failures, we can't log to AuditLog (performerId required)
+      // Use console warning instead for security monitoring
+      console.warn(
+        `[SECURITY] Failed admin login attempt for ${sanitizedEmail}: ${authError.message}`
+      );
       return { error: "Invalid email or password" }; // Generic message
     }
 
@@ -399,18 +392,11 @@ export async function loginManager(formData: FormData) {
       });
 
     if (authError) {
-      // Log failed attempt for rate limiting
-      await prisma.auditLog.create({
-        data: {
-          performerId: "00000000-0000-0000-0000-000000000000", // System user
-          action: "LOGIN_FAILED_MANAGER",
-          details: JSON.stringify({
-            email: sanitizedEmail,
-            reason: authError.message,
-            timestamp: new Date().toISOString(),
-          }),
-        },
-      });
+      // For pre-auth failures, we can't log to AuditLog (performerId required)
+      // Use console warning instead for security monitoring
+      console.warn(
+        `[SECURITY] Failed manager login attempt for ${sanitizedEmail}: ${authError.message}`
+      );
       return { error: "Invalid email or password" }; // Generic message
     }
 

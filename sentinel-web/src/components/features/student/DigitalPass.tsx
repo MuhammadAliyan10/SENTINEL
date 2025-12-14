@@ -51,8 +51,8 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
   const [accessState, setAccessState] = useState<AccessState>("LOADING");
   const [isOffline, setIsOffline] = useState(false);
   const [lastEntry, setLastEntry] = useState<Date | null>(null);
+  const [hasEnteredBefore, setHasEnteredBefore] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   // Track strap paths with state for re-renders
   const [leftPath, setLeftPath] = useState("M 15 0 Q 50 50 50 100");
@@ -133,11 +133,6 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const refreshQrPayload = useCallback(async () => {
     if (isRefreshing || isOffline) return;
     setIsRefreshing(true);
@@ -160,6 +155,20 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
 
   const checkInitialAccessState = useCallback(async () => {
     try {
+      // Check for any ENTRY logs to see if student has entered before
+      const { data: entryExists } = await supabase
+        .from("access_logs")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("type", "ENTRY")
+        .limit(1);
+
+      const hasEntered = entryExists && entryExists.length > 0;
+      if (hasEntered) {
+        setHasEnteredBefore(true);
+      }
+
+      // Get the most recent log to determine current state
       const { data, error } = await supabase
         .from("access_logs")
         .select("type, timestamp")
@@ -173,8 +182,13 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
         if (logData.type === "ENTRY") {
           setAccessState("INSIDE");
           setLastEntry(new Date(logData.timestamp));
+          setIsFlipped(true); // Auto-flip to show approved stamp
         } else {
           setAccessState("OUTSIDE");
+          // If student has entered before and is now outside, flip to show OUTSIDE stamp
+          if (hasEntered) {
+            setIsFlipped(true);
+          }
         }
       } else {
         setAccessState("OUTSIDE");
@@ -200,9 +214,12 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
           if (newLog.type === "ENTRY") {
             setAccessState("INSIDE");
             setLastEntry(new Date(newLog.timestamp));
+            setHasEnteredBefore(true);
+            setIsFlipped(true); // Auto-flip to show approved stamp
           } else if (newLog.type === "EXIT") {
             setAccessState("OUTSIDE");
             setLastEntry(null);
+            setIsFlipped(true); // Keep flipped to show OUTSIDE stamp
           }
         }
       )
@@ -428,6 +445,8 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                     ? "border-yellow-400"
                     : isInside
                     ? "border-emerald-400"
+                    : hasEnteredBefore
+                    ? "border-blue-400"
                     : "border-gray-200"
                 } shadow-lg`}
               >
@@ -438,8 +457,6 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                   includeMargin={false}
                 />
               </div>
-
-              {/* Status */}
             </div>
           </div>
 
@@ -519,22 +536,77 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                   </div>
                 )}
               </div>
-
-              {/* Live clock */}
-              <div className="mt-auto pt-3">
-                <p className="text-xs text-gray-400 font-mono text-center">
-                  {currentTime.toLocaleTimeString("en-US", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                    hour12: true,
-                  })}
-                </p>
-                <p className="text-[10px] text-gray-400 mt-2 text-center">
-                  Tap to flip back
-                </p>
-              </div>
             </div>
+
+            {/* Warning Footer */}
+            <div className="absolute bottom-0 left-0 right-0 bg-red-600 py-2 px-3">
+              <p className="text-white text-[9px] text-center font-medium leading-tight">
+                ⚠️ Sharing your pass or attempting to bypass security will
+                result in rustication
+              </p>
+            </div>
+
+            {/* APPROVED Stamp Overlay */}
+            {isInside && (
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                initial={{ scale: 3, opacity: 0, rotate: -15 }}
+                animate={{ scale: 1, opacity: 1, rotate: -12 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 15,
+                  delay: 0.3,
+                }}
+              >
+                <div
+                  className="px-8 py-3 border-4 border-emerald-500 rounded-lg"
+                  style={{
+                    transform: "rotate(-12deg)",
+                  }}
+                >
+                  <p
+                    className="text-emerald-500 font-bold text-3xl tracking-widest uppercase"
+                    style={{
+                      textShadow: "0 0 10px rgba(16, 185, 129, 0.3)",
+                    }}
+                  >
+                    APPROVED
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* OUTSIDE Stamp Overlay - when student has left */}
+            {!isInside && hasEnteredBefore && (
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                initial={{ scale: 3, opacity: 0, rotate: 15 }}
+                animate={{ scale: 1, opacity: 1, rotate: 12 }}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 15,
+                  delay: 0.3,
+                }}
+              >
+                <div
+                  className="px-8 py-3 border-4 border-blue-500 rounded-lg"
+                  style={{
+                    transform: "rotate(12deg)",
+                  }}
+                >
+                  <p
+                    className="text-blue-500 font-bold text-3xl tracking-widest uppercase"
+                    style={{
+                      textShadow: "0 0 10px rgba(59, 130, 246, 0.3)",
+                    }}
+                  >
+                    OUTSIDE
+                  </p>
+                </div>
+              </motion.div>
+            )}
           </div>
         </motion.div>
       </motion.div>

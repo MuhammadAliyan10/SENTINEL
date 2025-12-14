@@ -28,16 +28,32 @@ export default function StudentDashboard() {
     try {
       const res = await getTicketData();
       if (res) {
-        // @ts-ignore - type differences in server action
-        setData(res);
-        localStorage.setItem("cachedTicket", JSON.stringify(res));
+        // Extract only the fields we need, properly typed
+        const ticketData: TicketData = {
+          user: {
+            id: res.user.id,
+            sapId: res.user.sapId,
+            fullName: res.user.fullName,
+            profilePhotoUrl: res.user.profilePhotoUrl,
+            gender: res.user.gender,
+            section: res.user.section,
+          },
+          qrCode: res.qrCode,
+          timestamp: res.timestamp,
+        };
+        setData(ticketData);
+        localStorage.setItem("cachedTicket", JSON.stringify(ticketData));
       }
     } catch (error) {
-      console.error("Fetch Error:", error);
+      // SECURITY: Don't log full error details in production
       const cached = localStorage.getItem("cachedTicket");
       if (cached) {
-        setData(JSON.parse(cached));
-        toast.warning("Offline Mode: Using cached ticket");
+        try {
+          setData(JSON.parse(cached) as TicketData);
+          toast.warning("Offline Mode: Using cached ticket");
+        } catch {
+          toast.error("Failed to load cached ticket.");
+        }
       } else {
         toast.error("Network error and no cached ticket found.");
       }

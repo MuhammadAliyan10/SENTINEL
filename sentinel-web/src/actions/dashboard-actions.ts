@@ -60,38 +60,51 @@ const getCachedDashboardStats = unstable_cache(
     const todayStart = new Date(now.setHours(0, 0, 0, 0));
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-    const [entries, exits, paidStudents, lastHourScans, deniedToday] =
-      await Promise.all([
-        prisma.accessLog.count({
-          where: {
-            timestamp: { gte: todayStart },
-            status: "GRANTED",
-            type: "ENTRY",
-          },
-        }),
-        prisma.accessLog.count({
-          where: {
-            timestamp: { gte: todayStart },
-            status: "GRANTED",
-            type: "EXIT",
-          },
-        }),
-        prisma.user.count({
-          where: { role: "STUDENT", isPaid: true },
-        }),
-        prisma.accessLog.count({
-          where: { timestamp: { gte: oneHourAgo } },
-        }),
-        prisma.accessLog.count({
-          where: {
-            timestamp: { gte: todayStart },
-            status: "REJECTED",
-          },
-        }),
-      ]);
+    // FIX: Fetch capacity from active event instead of hardcoding
+    const [
+      activeEvent,
+      entries,
+      exits,
+      paidStudents,
+      lastHourScans,
+      deniedToday,
+    ] = await Promise.all([
+      prisma.event.findFirst({
+        where: { isDefault: true },
+        select: { maxCapacity: true },
+      }),
+      prisma.accessLog.count({
+        where: {
+          timestamp: { gte: todayStart },
+          status: "GRANTED",
+          type: "ENTRY",
+        },
+      }),
+      prisma.accessLog.count({
+        where: {
+          timestamp: { gte: todayStart },
+          status: "GRANTED",
+          type: "EXIT",
+        },
+      }),
+      prisma.user.count({
+        where: { role: "STUDENT", isPaid: true },
+      }),
+      prisma.accessLog.count({
+        where: { timestamp: { gte: oneHourAgo } },
+      }),
+      prisma.accessLog.count({
+        where: {
+          timestamp: { gte: todayStart },
+          status: "REJECTED",
+        },
+      }),
+    ]);
 
     const occupancy = entries - exits;
-    const occupancyRate = occupancy / 2000; // TODO: Fetch capacity from settings
+    // Use event capacity if available, fallback to 2000
+    const venueCapacity = activeEvent?.maxCapacity ?? 2000;
+    const occupancyRate = venueCapacity > 0 ? occupancy / venueCapacity : 0;
 
     return {
       liveOccupancy: {

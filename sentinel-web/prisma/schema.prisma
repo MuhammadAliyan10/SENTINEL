@@ -151,6 +151,8 @@ model AccessLog {
   @@index([userId, timestamp]) // Composite for user history
   @@index([eventId, timestamp]) // For event-specific queries
   @@index([status, timestamp]) // For security alerts
+  @@index([type, timestamp]) // LOW-4 FIX: For dashboard queries filtering by ENTRY/EXIT type
+  @@index([type, status, timestamp]) // For combined type+status queries
   @@map("access_logs")
 }
 

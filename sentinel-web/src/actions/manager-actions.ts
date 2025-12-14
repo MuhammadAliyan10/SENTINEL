@@ -2,10 +2,11 @@
 
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath, unstable_cache } from "next/cache";
 import { randomBytes } from "crypto";
 import { getTicketPrice } from "@/actions/settings-actions";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 
 // ============================================
 // TYPES
@@ -212,18 +213,32 @@ export async function issuePass(
   try {
     const managerId = await getManagerId();
 
-    if (!sapId || !/^\d+$/.test(sapId)) {
-      return { success: false, message: "Invalid SAP ID format" };
+    // ============================================
+    // INPUT VALIDATION (HARDENED)
+    // ============================================
+    if (!sapId || !/^\d{6,10}$/.test(sapId)) {
+      return {
+        success: false,
+        message: "Invalid SAP ID format (must be 6-10 digits)",
+      };
     }
 
-    if (!fullName || fullName.trim().length < 3) {
+    const sanitizedName = fullName
+      .trim()
+      .replace(/<[^>]*>/g, "") // Remove HTML tags
+      .replace(/[<>"'`]/g, "") // Remove dangerous chars
+      .slice(0, 100); // Max length
+
+    if (sanitizedName.length < 3) {
       return {
         success: false,
         message: "Full name is required (min 3 characters)",
       };
     }
 
-    // RATE LIMITING: Check passes issued in the last minute
+    // ============================================
+    // RATE LIMITING: Max 10 passes per minute
+    // ============================================
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
     const recentPasses = await prisma.user.count({
       where: {
@@ -239,144 +254,209 @@ export async function issuePass(
       };
     }
 
+    // ============================================
+    // PRE-FLIGHT CHECK: Does student already exist in DB?
+    // ============================================
+    const existingStudent = await prisma.user.findUnique({
+      where: { sapId },
+      select: { id: true, createdBy: { select: { fullName: true } } },
+    });
+
+    if (existingStudent) {
+      const creatorName = existingStudent.createdBy?.fullName || "System";
+      return {
+        success: false,
+        message: `Student already registered by ${creatorName}`,
+      };
+    }
+
     // Get manager's section and semester to inherit
     const manager = await prisma.user.findUnique({
       where: { id: managerId },
       select: { section: true, semester: true },
     });
 
-    // SECURITY FIX: Use transaction with locking to prevent race conditions
-    const result = await prisma.$transaction(
-      async (tx) => {
-        // 1. Check if student already exists
-        const existingStudent = await tx.user.findUnique({
-          where: { sapId },
-          select: { id: true, createdBy: { select: { fullName: true } } },
-        });
+    // ============================================
+    // GENERATE CREDENTIALS
+    // ============================================
+    const token = generateToken();
+    const email = `${sapId}@sentinel.edu`;
 
-        if (existingStudent) {
-          const creatorName = existingStudent.createdBy?.fullName || "System";
-          return {
-            success: false as const,
-            message: `Student already registered by ${creatorName}`,
-          };
-        }
+    // ============================================
+    // SUPABASE AUTH: Create or reclaim user
+    // CRITICAL FIX: No more unbounded listUsers() - use create with conflict handling
+    // ============================================
+    const supabaseAdmin = createAdminClient();
+    let authUserId: string;
+    let wasNewAuthUser = false;
 
-        // 2. Generate Token
-        const token = generateToken();
+    // Try to create new user first
+    const { data: createResult, error: createError } =
+      await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: token,
+        email_confirm: true,
+        user_metadata: { sapId, role: "STUDENT" },
+      });
 
-        // 3. Create Supabase Auth User (Admin)
-        // 3. Create or Get Supabase Auth User (Admin)
-        const supabaseAdmin = createSupabaseClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!,
-          {
-            auth: {
-              autoRefreshToken: false,
-              persistSession: false,
-            },
-          }
-        );
+    if (createError) {
+      // Handle "email already registered" - reclaim the orphan user
+      if (
+        createError.message?.includes("already been registered") ||
+        createError.code === "email_exists"
+      ) {
+        // CRITICAL FIX: Use paginated listUsers with filter instead of fetching all
+        // Note: Supabase Admin API doesn't support email filter directly in listUsers
+        // Best approach: try to get user by creating then handling conflict
+        // Alternative: Use Supabase getUserById if we stored the ID, but we don't have it here
 
-        const email = `${sapId}@sentinel.edu`;
-        let authUserId: string;
+        // Since we can't query by email directly, we need to handle this edge case
+        // This should be rare (orphan auth users without DB records)
+        // For now, use limited pagination as a fallback
+        let orphanUser = null;
+        let page = 1;
+        const perPage = 50;
 
-        // Check if user already exists in Auth
-        const { data: existingAuthUsers } =
-          await supabaseAdmin.auth.admin.listUsers();
-        const existingAuthUser = existingAuthUsers.users.find(
-          (u) => u.email === email
-        );
-
-        if (existingAuthUser) {
-          // Update password for existing user
-          const { error: updateError } =
-            await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
-              password: token,
-              user_metadata: { sapId, role: "STUDENT" },
-            });
-
-          if (updateError) {
-            console.error("Supabase Auth Update Error:", updateError);
-            throw new Error("Failed to update existing authentication record");
-          }
-          authUserId = existingAuthUser.id;
-        } else {
-          // Create new user
-          const { data: authUser, error: authError } =
-            await supabaseAdmin.auth.admin.createUser({
-              email,
-              password: token,
-              email_confirm: true,
-              user_metadata: { sapId, role: "STUDENT" },
-            });
-
-          if (authError || !authUser.user) {
-            console.error("Supabase Auth Error:", authError);
-            throw new Error("Failed to create authentication record");
-          }
-          authUserId = authUser.user.id;
-        }
-
-        // 4. Create Prisma User
-        try {
-          const newStudent = await tx.user.create({
-            data: {
-              id: authUserId,
-              sapId,
-              fullName: fullName.trim(),
-              role: "STUDENT",
-              isPaid: true,
-              isActive: true,
-              createdById: managerId,
-              activationToken: token,
-              section: manager?.section || null,
-              semester: manager?.semester || null,
-            },
+        // Search with reasonable limit (max 500 users checked)
+        while (page <= 10 && !orphanUser) {
+          const { data: userPage } = await supabaseAdmin.auth.admin.listUsers({
+            page,
+            perPage,
           });
 
-          return {
-            success: true as const,
-            message: "Pass issued successfully",
-            token: token,
-            studentName: newStudent.fullName || "Student",
-          };
-        } catch (dbError) {
-          console.error("DB Creation Failed. Rolling back Auth User:", dbError);
-          // Only delete if we just created it? Or just leave it?
-          // If we updated an existing user, we probably shouldn't delete them on DB failure.
-          // But for safety in this specific flow (new pass issuance), let's just log.
-          // Deleting an existing user who might have history (but no Prisma record?) is risky.
-          // However, if they have no Prisma record, they are effectively "zombie" auth users.
-          // Let's keep it simple: if it was a NEW creation, we delete. If existing, we leave it.
-          // But tracking that state inside the transaction is tricky without more variables.
-          // Given the "Extreme Security" requirement, let's NOT delete automatically to avoid accidental data loss.
-          // Instead, we throw the error and let the admin handle "zombie" users if they pile up.
-          throw new Error(
-            "Student already exists in database or creation failed."
-          );
-        }
-      },
-      {
-        isolationLevel: "Serializable",
-        timeout: 10000,
-      }
-    );
+          if (!userPage?.users?.length) break;
 
-    if (result.success) {
-      revalidatePath("/manager/dashboard");
-      // Invalidate cache tags
-      // Note: revalidateTag is not available in this context easily without importing,
-      // but revalidatePath handles the page cache.
-      // For unstable_cache, we rely on time-based revalidation or could use revalidateTag if we imported it.
+          orphanUser = userPage.users.find((u) => u.email === email);
+          page++;
+        }
+
+        if (!orphanUser) {
+          console.error("Email conflict but user not found in first 500 users");
+          return {
+            success: false,
+            message: "Registration conflict. Please contact admin.",
+          };
+        }
+
+        // Check if this orphan has a Prisma record
+        const prismaRecord = await prisma.user.findUnique({
+          where: { id: orphanUser.id },
+        });
+
+        if (prismaRecord) {
+          return {
+            success: false,
+            message: "User already exists in the system.",
+          };
+        }
+
+        // Reclaim orphan: update password
+        const { error: updateError } =
+          await supabaseAdmin.auth.admin.updateUserById(orphanUser.id, {
+            password: token,
+            user_metadata: { sapId, role: "STUDENT" },
+          });
+
+        if (updateError) {
+          console.error("Failed to reclaim orphan auth user:", updateError);
+          return {
+            success: false,
+            message: "Failed to update authentication. Contact admin.",
+          };
+        }
+
+        authUserId = orphanUser.id;
+        wasNewAuthUser = false;
+      } else {
+        console.error("Supabase Auth Error:", createError);
+        return {
+          success: false,
+          message: "Failed to create authentication record.",
+        };
+      }
+    } else {
+      if (!createResult?.user) {
+        return {
+          success: false,
+          message: "Authentication creation returned no user.",
+        };
+      }
+      authUserId = createResult.user.id;
+      wasNewAuthUser = true;
     }
 
-    return result;
+    // ============================================
+    // DATABASE INSERT with explicit rollback on failure
+    // CRITICAL FIX: Proper rollback of Supabase auth user
+    // ============================================
+    try {
+      await prisma.user.create({
+        data: {
+          id: authUserId,
+          sapId,
+          fullName: sanitizedName,
+          role: "STUDENT",
+          isPaid: true,
+          isActive: true,
+          createdById: managerId,
+          activationToken: token,
+          section: manager?.section || null,
+          semester: manager?.semester || null,
+        },
+      });
+    } catch (dbError) {
+      // CRITICAL FIX: Rollback Supabase auth user if we just created it
+      if (wasNewAuthUser) {
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(authUserId);
+          console.log(
+            "Successfully rolled back Supabase auth user:",
+            authUserId
+          );
+        } catch (rollbackError) {
+          console.error(
+            "ALERT: Failed to rollback auth user - orphan created:",
+            authUserId,
+            rollbackError
+          );
+        }
+      }
+
+      console.error("Database insert failed:", dbError);
+
+      // Check for unique constraint violation (concurrent registration)
+      if (
+        dbError instanceof Error &&
+        dbError.message.includes("Unique constraint")
+      ) {
+        return {
+          success: false,
+          message: "Student already exists (concurrent registration detected).",
+        };
+      }
+
+      return {
+        success: false,
+        message: "Failed to create student record. Please try again.",
+      };
+    }
+
+    // ============================================
+    // SUCCESS: Revalidate caches
+    // ============================================
+    revalidatePath("/manager/dashboard");
+
+    return {
+      success: true,
+      message: "Pass issued successfully",
+      token: token,
+      studentName: sanitizedName,
+    };
   } catch (error) {
     console.error("Issue Pass Error:", error);
     return {
       success: false,
-      message: error instanceof Error ? error.message : "Failed to issue pass",
+      message: "An unexpected error occurred. Please try again.",
     };
   }
 }
@@ -423,33 +503,9 @@ export async function deleteStudent(
     }
 
     // Delete from Supabase Auth
-    const supabaseAdmin = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    );
+    const supabaseAdmin = createAdminClient();
 
-    // Delete from Prisma first
-    await prisma.user.delete({
-      where: { id: studentId },
-    });
-
-    // Delete from Supabase Auth
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
-      studentId
-    );
-
-    if (authError) {
-      console.error("Failed to delete from Supabase Auth:", authError);
-      // Don't return error since Prisma deletion succeeded
-    }
-
-    // Log the action
+    // Log the action BEFORE deleting (so we have record of who deleted)
     await prisma.auditLog.create({
       data: {
         performerId: managerId,
@@ -460,6 +516,32 @@ export async function deleteStudent(
         })`,
       },
     });
+
+    // Delete related records first to avoid foreign key constraints
+    // 1. Delete access logs where this user was scanned
+    await prisma.accessLog.deleteMany({
+      where: { userId: studentId },
+    });
+
+    // 2. Delete audit logs where this user was the performer (if any)
+    await prisma.auditLog.deleteMany({
+      where: { performerId: studentId },
+    });
+
+    // 3. Now delete the user from Prisma
+    await prisma.user.delete({
+      where: { id: studentId },
+    });
+
+    // 4. Delete from Supabase Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
+      studentId
+    );
+
+    if (authError) {
+      console.error("Failed to delete from Supabase Auth:", authError);
+      // Don't return error since Prisma deletion succeeded
+    }
 
     revalidatePath("/manager/dashboard");
 

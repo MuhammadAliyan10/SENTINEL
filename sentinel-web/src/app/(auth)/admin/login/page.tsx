@@ -2,7 +2,6 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -10,11 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import {
-  getUserRole,
-  logSuccessfulLogin,
-  logFailedLogin,
-} from "@/actions/auth-actions";
+import { loginAdmin } from "@/actions/auth-actions";
 import Image from "next/image";
 
 // SECURITY: Validate redirect path to prevent open redirect attacks
@@ -40,11 +35,6 @@ function AdminLoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -61,40 +51,22 @@ function AdminLoginForm() {
     setIsLoading(true);
     setError(null);
 
-    try {
-      const { data: authData, error: authError } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+    // Use FormData to call server action
+    const formData = new FormData();
+    formData.append("email", email);
+    formData.append("password", password);
+    formData.append("redirectTo", redirectPath);
 
-      if (authError) {
-        logFailedLogin(email, authError.message);
-        throw new Error(authError.message);
-      }
+    const result = await loginAdmin(formData);
 
-      if (!authData.user) {
-        logFailedLogin(email, "No user returned");
-        throw new Error("Authentication failed");
-      }
-
-      const role = await getUserRole();
-
-      if (role !== "SUPER_ADMIN") {
-        await supabase.auth.signOut();
-        logFailedLogin(email, "Unauthorized role: " + role);
-        throw new Error("Access Denied: Administrator privileges required");
-      }
-
-      logSuccessfulLogin(authData.user.id, "SUPER_ADMIN");
-
-      toast.success("Welcome back, Commander");
-      window.location.href = redirectPath;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to sign in";
-      setError(message);
-      toast.error(message);
+    // If we get here, there was an error (successful login redirects)
+    if (result?.error) {
+      setError(result.error);
+      toast.error(result.error);
       setIsLoading(false);
+    } else {
+      // Login succeeded, toast will show but we're redirecting
+      toast.success("Welcome back, Commander");
     }
   };
 

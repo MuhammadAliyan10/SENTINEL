@@ -2,7 +2,30 @@
 
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
+
+/**
+ * SECURITY: Timing-safe HMAC signature comparison
+ * Prevents timing attacks by ensuring comparison takes constant time
+ */
+function safeHmacCompare(
+  signature: string,
+  expectedSignature: string
+): boolean {
+  if (signature.length !== expectedSignature.length) {
+    // Prevent length-based timing attacks
+    const dummyBuffer = Buffer.from(expectedSignature, "hex");
+    timingSafeEqual(dummyBuffer, dummyBuffer);
+    return false;
+  }
+  try {
+    const sigBuffer = Buffer.from(signature, "hex");
+    const expectedBuffer = Buffer.from(expectedSignature, "hex");
+    return timingSafeEqual(sigBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 export interface QRVerifyResult {
   valid: boolean;
@@ -136,12 +159,14 @@ export async function verifyQRCode(
     }
 
     // Verify HMAC signature
+    // SECURITY: Use timing-safe comparison to prevent timing attacks
     const payloadString = `${sapId}:${timestamp}`;
     const expectedSignature = createHmac("sha256", student.activationToken)
       .update(payloadString)
       .digest("hex");
 
-    const isValid = signature === expectedSignature;
+    // CRITICAL FIX: Timing-safe HMAC comparison
+    const isValid = safeHmacCompare(signature, expectedSignature);
 
     return {
       valid: isValid,

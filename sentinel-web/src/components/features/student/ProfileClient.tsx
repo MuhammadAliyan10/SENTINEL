@@ -5,13 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   LogOut,
   Phone,
   CreditCard,
-  MapPin,
   Lock,
   HelpCircle,
   Calendar,
@@ -21,10 +19,15 @@ import {
   IdCard,
   X,
   ZoomIn,
+  Users,
+  Sparkles,
+  GraduationCap,
+  Users2,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 interface ProfileClientProps {
   user: {
@@ -55,7 +58,6 @@ export default function ProfileClient({ user, signOut }: ProfileClientProps) {
   const isActive = user.isActive;
   const isPaid = user.isPaid;
 
-  // Get section/semester from manager info if not set on user
   const displaySection =
     user.section || (user.createdBy ? "See Manager" : "N/A");
   const displaySemester =
@@ -63,7 +65,7 @@ export default function ProfileClient({ user, signOut }: ProfileClientProps) {
 
   return (
     <>
-      {/* Image Lightbox/Gallery */}
+      {/* Image Lightbox */}
       <Dialog
         open={!!selectedImage}
         onOpenChange={() => setSelectedImage(null)}
@@ -89,231 +91,279 @@ export default function ProfileClient({ user, signOut }: ProfileClientProps) {
         </DialogContent>
       </Dialog>
 
-      <div className="min-h-screen bg-slate-50 p-4 pb-24">
-        <div className="max-w-md mx-auto space-y-4">
-          {/* Header */}
-          <h1 className="text-2xl font-bold text-slate-900 pt-4">My Profile</h1>
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 pb-28">
+        {/* Premium Header with Gradient */}
+        <div className="bg-gradient-to-br from-primary via-primary to-primary/80 pt-12 pb-20 px-4 relative overflow-hidden">
+          {/* Decorative Elements */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
 
-          {/* Profile Card */}
-          <Card className="bg-white rounded-sm p-0 border-slate-200 shadow-sm overflow-hidden">
-            {/* Header with Photo */}
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5 flex flex-col items-center">
-              <div className="relative">
-                <button
-                  onClick={() =>
-                    user.profilePhotoUrl &&
-                    setSelectedImage(user.profilePhotoUrl)
-                  }
-                  className="relative group"
-                  disabled={!user.profilePhotoUrl}
-                >
-                  <Avatar className="h-20 w-20 border-4 border-white shadow-lg cursor-pointer">
-                    <AvatarImage src={user.profilePhotoUrl || ""} />
-                    <AvatarFallback className="bg-slate-200 text-slate-600 text-xl font-bold">
-                      {user.fullName?.charAt(0) || "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                  {user.profilePhotoUrl && (
-                    <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <ZoomIn className="h-6 w-6 text-white" />
-                    </div>
-                  )}
-                </button>
-                <div
-                  className={cn(
-                    "absolute -bottom-1 -right-1 w-6 h-6 rounded-full border-2 border-white flex items-center justify-center",
-                    isActive ? "bg-emerald-500" : "bg-red-500"
-                  )}
-                >
-                  {isActive ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                  ) : (
-                    <XCircle className="h-3.5 w-3.5 text-white" />
-                  )}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative z-10 text-center"
+          >
+            <h1 className="text-white text-2xl font-bold flex items-center justify-center gap-2">
+              <Users2 className="h-5 w-5" />
+              My Profile
+            </h1>
+          </motion.div>
+        </div>
+
+        <div className="max-w-md mx-auto px-4 -mt-14 space-y-4">
+          {/* Profile Card - Premium Design */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <Card className="bg-white border-0 shadow-xl rounded-2xl overflow-hidden">
+              {/* Avatar Section */}
+              <div className="flex flex-col items-center pt-6 pb-4 px-6">
+                <div className="relative">
+                  <button
+                    onClick={() =>
+                      user.profilePhotoUrl &&
+                      setSelectedImage(user.profilePhotoUrl)
+                    }
+                    className="relative group"
+                    disabled={!user.profilePhotoUrl}
+                  >
+                    <Avatar className="h-24 w-24 border-4 border-white shadow-xl ring-4 ring-primary/10">
+                      <AvatarImage src={user.profilePhotoUrl || ""} />
+                      <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/40 text-primary text-2xl font-bold">
+                        {user.fullName?.charAt(0) || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    {user.profilePhotoUrl && (
+                      <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <ZoomIn className="h-6 w-6 text-white" />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Status Badge */}
+                  <div
+                    className={cn(
+                      "absolute -bottom-1 -right-1 w-7 h-7 rounded-full border-3 border-white flex items-center justify-center shadow-lg",
+                      isActive ? "bg-emerald-500" : "bg-red-500"
+                    )}
+                  >
+                    {isActive ? (
+                      <CheckCircle2 className="h-4 w-4 text-white" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-white" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Name & ID */}
+                <h2 className="mt-4 text-xl font-bold text-gray-900">
+                  {user.fullName}
+                </h2>
+                <p className="text-gray-500 font-mono text-sm mt-1">
+                  {user.sapId}
+                </p>
+
+                {/* Badges */}
+                <div className="flex gap-2 mt-3">
+                  <Badge
+                    className={cn(
+                      "px-3 py-1 rounded-full text-xs font-medium border-0",
+                      isMale
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-pink-100 text-pink-700"
+                    )}
+                  >
+                    {isMale ? "Male" : "Female"}
+                  </Badge>
+                  <Badge
+                    className={cn(
+                      "px-3 py-1 rounded-full text-xs font-medium border-0",
+                      isPaid
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    )}
+                  >
+                    {isPaid ? "✓ Paid" : "Pending"}
+                  </Badge>
                 </div>
               </div>
-              <h2 className="mt-3 text-lg font-bold text-white">
-                {user.fullName}
-              </h2>
-              <p className="text-slate-400 font-mono text-sm">{user.sapId}</p>
-              <div className="flex gap-2 mt-2">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "border-0 text-white text-xs",
-                    isMale ? "bg-blue-500" : "bg-pink-500"
-                  )}
-                >
-                  {isMale ? "MALE" : "FEMALE"}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "border-0 text-white text-xs",
-                    isPaid ? "bg-emerald-500" : "bg-amber-500"
-                  )}
-                >
-                  {isPaid ? "PAID" : "PENDING"}
-                </Badge>
-              </div>
-            </div>
 
-            {/* Details */}
-            <CardContent className="p-4 space-y-3">
-              {/* Class Info */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-slate-100 rounded-lg">
-                    <MapPin className="h-4 w-4 text-slate-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase">
-                      Section
-                    </p>
-                    <p className="text-sm font-medium text-slate-900">
+              {/* Info Grid */}
+              <CardContent className="px-6 pb-6">
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Section */}
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-white rounded-lg shadow-sm">
+                        <Users className="h-4 w-4 text-primary" />
+                      </div>
+                      <span className="text-[10px] text-gray-500 uppercase font-medium tracking-wider">
+                        Section
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900">
                       {displaySection}
                     </p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-slate-100 rounded-lg">
-                    <Calendar className="h-4 w-4 text-slate-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase">
-                      Semester
-                    </p>
-                    <p className="text-sm font-medium text-slate-900">
+
+                  {/* Semester */}
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-white rounded-lg shadow-sm">
+                        <GraduationCap className="h-4 w-4 text-primary" />
+                      </div>
+                      <span className="text-[10px] text-gray-500 uppercase font-medium tracking-wider">
+                        Semester
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900">
                       {displaySemester}
                     </p>
                   </div>
-                </div>
-              </div>
 
-              <Separator />
-
-              {/* Contact Info */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-slate-100 rounded-lg">
-                    <Phone className="h-4 w-4 text-slate-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase">
-                      Phone
-                    </p>
-                    <p className="text-sm font-medium text-slate-900">
-                      {user.phoneNumber || "Not provided"}
+                  {/* Phone */}
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-white rounded-lg shadow-sm">
+                        <Phone className="h-4 w-4 text-primary" />
+                      </div>
+                      <span className="text-[10px] text-gray-500 uppercase font-medium tracking-wider">
+                        Phone
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {user.phoneNumber || "Not set"}
                     </p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-slate-100 rounded-lg">
-                    <CreditCard className="h-4 w-4 text-slate-600" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase">CNIC</p>
-                    <p className="text-sm font-medium text-slate-900">
+
+                  {/* CNIC */}
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-white rounded-lg shadow-sm">
+                        <CreditCard className="h-4 w-4 text-primary" />
+                      </div>
+                      <span className="text-[10px] text-gray-500 uppercase font-medium tracking-wider">
+                        CNIC
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900 font-mono">
                       {user.cnic
-                        ? `${user.cnic.slice(0, 5)}-*******-${user.cnic.slice(
-                            -1
-                          )}`
-                        : "Not provided"}
+                        ? `${user.cnic.slice(0, 5)}-***-${user.cnic.slice(-1)}`
+                        : "Not set"}
                     </p>
                   </div>
                 </div>
-              </div>
 
-              {/* Registration Info */}
-              {user.createdBy && (
-                <>
-                  <Separator />
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-slate-100 rounded-lg">
-                      <Shield className="h-4 w-4 text-slate-600" />
+                {/* Registered By */}
+                {user.createdBy && (
+                  <div className="mt-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl p-4 flex items-center gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Shield className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-500 uppercase">
+                      <p className="text-[10px] text-gray-500 uppercase font-medium tracking-wider">
                         Registered By
                       </p>
-                      <p className="text-sm font-medium text-slate-900">
-                        {user.createdBy.fullName || "Admin"} (
-                        {user.createdBy.role})
+                      <p className="text-sm font-semibold text-gray-900">
+                        {user.createdBy.fullName || "Admin"}{" "}
+                        <span className="text-gray-500 font-normal">
+                          ({user.createdBy.role})
+                        </span>
                       </p>
                     </div>
                   </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* University Card Preview */}
-          {user.universityCardUrl && (
-            <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <IdCard className="h-4 w-4 text-slate-600" />
-                  University Card
-                  <span className="ml-auto text-xs text-slate-400">
-                    Tap to zoom
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <button
-                  onClick={() => setSelectedImage(user.universityCardUrl)}
-                  className="relative w-full aspect-[1.6/1] rounded-lg overflow-hidden border border-slate-200 group cursor-pointer"
-                >
-                  <Image
-                    src={user.universityCardUrl}
-                    alt="University Card"
-                    fill
-                    className="object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <ZoomIn className="h-8 w-8 text-white" />
-                  </div>
-                </button>
+                )}
               </CardContent>
             </Card>
+          </motion.div>
+
+          {/* University Card */}
+          {user.universityCardUrl && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card className="bg-white border-0 shadow-lg rounded-2xl overflow-hidden">
+                <CardHeader className="px-5 py-4 pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2 text-gray-800">
+                    <IdCard className="h-4 w-4 text-primary" />
+                    University Card
+                    <span className="ml-auto text-xs text-gray-400 font-normal">
+                      Tap to zoom
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-5 pb-5 pt-2">
+                  <button
+                    onClick={() => setSelectedImage(user.universityCardUrl)}
+                    className="relative w-full aspect-[1.6/1] rounded-xl overflow-hidden border border-gray-100 group cursor-pointer shadow-sm"
+                  >
+                    <Image
+                      src={user.universityCardUrl}
+                      alt="University Card"
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <ZoomIn className="h-8 w-8 text-white" />
+                    </div>
+                  </button>
+                </CardContent>
+              </Card>
+            </motion.div>
           )}
 
-          {/* Locked Notice */}
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
-            <Lock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          {/* Locked Notice - Premium Style */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-2xl p-4 flex items-start gap-3 shadow-sm"
+          >
+            <div className="p-2 bg-amber-100 rounded-lg">
+              <Lock className="h-4 w-4 text-amber-600" />
+            </div>
             <div>
-              <p className="text-sm font-medium text-amber-700">
+              <p className="text-sm font-semibold text-amber-800">
                 Profile Locked
               </p>
-              <p className="text-xs text-amber-600/80">
-                Contact Admin for corrections.
+              <p className="text-xs text-amber-700/80 mt-0.5">
+                Contact Admin if you need any corrections.
               </p>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Actions */}
-          <div className="space-y-2">
+          {/* Action Buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="space-y-3 pt-2"
+          >
             <Button
               asChild
               variant="outline"
-              className="w-full bg-white border-slate-200 text-slate-700"
+              className="w-full h-12 bg-white border-gray-200 text-gray-700 rounded-xl shadow-sm hover:shadow-md transition-shadow"
             >
               <Link href="https://wa.me/923026767428" target="_blank">
                 <HelpCircle className="mr-2 h-4 w-4" />
-                Need Help?
+                Need Help? Contact Support
               </Link>
             </Button>
 
             <form action={signOut}>
               <Button
                 variant="ghost"
-                className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                className="w-full h-12 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl"
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </Button>
             </form>
-          </div>
+          </motion.div>
         </div>
       </div>
     </>

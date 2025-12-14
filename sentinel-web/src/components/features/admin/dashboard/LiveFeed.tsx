@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, ShieldCheck, ShieldAlert, User } from "lucide-react";
@@ -18,9 +18,14 @@ interface LogEntry {
 export function LiveFeed() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  // PERFORMANCE FIX: Memoize Supabase client to prevent recreation on every render
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    []
   );
 
   useEffect(() => {
@@ -32,20 +37,14 @@ export function LiveFeed() {
           event: "INSERT",
           schema: "public",
           table: "access_logs",
-          filter: "status=in.(GRANTED,REJECTED,DUPLICATE)", // Filter to reduce noise
+          filter: "status=in.(GRANTED,REJECTED,DUPLICATE)",
         },
         (payload) => {
           const newLog = payload.new as LogEntry;
           setLogs((prev) => [newLog, ...prev].slice(0, 10)); // Keep last 10
         }
       )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          console.log("LiveFeed connected");
-        } else if (status === "CHANNEL_ERROR") {
-          console.error("LiveFeed connection error - check RLS policies");
-        }
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);

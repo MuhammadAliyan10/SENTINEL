@@ -318,13 +318,20 @@ const getCachedStats = unstable_cache(
       paidStudents: paid,
       unpaidStudents: total - paid,
       profileCompleted: completed,
+      // FIX: Safely access Prisma groupBy aggregate counts
       bySemester: semesterGroups.map((g) => ({
-        semester: g.semester!,
-        count: (g._count as any).semester ?? 0,
+        semester: g.semester ?? "Unknown",
+        count:
+          typeof g._count === "object" && g._count !== null
+            ? (g._count as Record<string, number>).semester ?? 0
+            : 0,
       })),
       bySection: sectionGroups.map((g) => ({
-        section: g.section!,
-        count: (g._count as any).section ?? 0,
+        section: g.section ?? "Unknown",
+        count:
+          typeof g._count === "object" && g._count !== null
+            ? (g._count as Record<string, number>).section ?? 0
+            : 0,
       })),
     };
   },

@@ -125,8 +125,8 @@ _Please keep this token secure._`;
           ISSUE NEW PASS
         </Button>
       </DrawerTrigger>
-      <DrawerContent className="max-h-[85vh]">
-        <div className="mx-auto w-full max-w-sm overflow-y-auto">
+      <DrawerContent className="max-h-[90vh]">
+        <div className="mx-auto w-full max-w-sm">
           <DrawerHeader>
             <DrawerTitle>Issue New Pass</DrawerTitle>
             <DrawerDescription>

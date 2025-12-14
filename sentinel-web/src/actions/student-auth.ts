@@ -4,6 +4,24 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { timingSafeEqual } from "crypto";
+
+/**
+ * SECURITY: Timing-safe string comparison
+ * Prevents timing attacks by ensuring comparison takes constant time
+ */
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    // To prevent length-based timing attacks, compare against itself
+    // but return false. The comparison still runs to use same time.
+    const dummyBuffer = Buffer.from(a, "utf8");
+    timingSafeEqual(dummyBuffer, dummyBuffer);
+    return false;
+  }
+  const bufferA = Buffer.from(a, "utf8");
+  const bufferB = Buffer.from(b, "utf8");
+  return timingSafeEqual(bufferA, bufferB);
+}
 
 const loginSchema = z.object({
   sapId: z
@@ -90,10 +108,15 @@ export async function loginStudent(formData: FormData) {
     }
 
     // 2. Verify Token (case-insensitive, both stored and input as uppercase)
-    const storedToken = user.activationToken?.toUpperCase();
+    // SECURITY: Use timing-safe comparison to prevent timing attacks
+    const storedToken = user.activationToken?.toUpperCase() || "";
     const inputToken = token.toUpperCase();
 
-    if (!storedToken || storedToken !== inputToken) {
+    // CRITICAL FIX: Timing-safe comparison prevents timing attacks
+    const tokenValid =
+      storedToken.length > 0 && safeCompare(storedToken, inputToken);
+
+    if (!tokenValid) {
       // SECURITY: Increment failed attempts
       const newFailedAttempts = (user.failedLoginAttempts || 0) + 1;
       const shouldLock = newFailedAttempts >= MAX_LOGIN_ATTEMPTS;

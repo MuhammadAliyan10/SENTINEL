@@ -92,7 +92,7 @@ export function LedgerList({ entries }: LedgerListProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Student</TableHead>
-              <TableHead className="text-right">Time</TableHead>
+              <TableHead className="text-right">Date & Time</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -112,10 +112,21 @@ export function LedgerList({ entries }: LedgerListProps) {
                   </div>
                 </TableCell>
                 <TableCell className="text-right text-muted-foreground text-sm">
-                  {new Date(entry.createdAt).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  <div className="flex flex-col items-end">
+                    <span className="font-medium text-foreground">
+                      {new Date(entry.createdAt).toLocaleDateString("en-PK", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                    <span className="text-xs">
+                      {new Date(entry.createdAt).toLocaleTimeString("en-PK", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <AlertDialog>

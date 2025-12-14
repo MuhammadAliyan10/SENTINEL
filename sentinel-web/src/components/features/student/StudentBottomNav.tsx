@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 
 export default function StudentBottomNav() {
   const pathname = usePathname();
-  console.log("StudentBottomNav rendering", pathname);
 
   const links = [
     {

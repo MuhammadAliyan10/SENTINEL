@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
+import { motion, useMotionValue, useSpring } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  WifiOff,
-  Loader2,
-  CheckCircle2,
-  PartyPopper,
-  ShieldCheck,
-  Clock,
-} from "lucide-react";
+import { WifiOff, Loader2 } from "lucide-react";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
-import { CardContainer, CardBody, CardItem } from "@/components/ui/3d-card";
+import { Badge } from "@/components/ui/badge";
 
 // ============================================
 // TYPES
@@ -43,9 +42,11 @@ type AccessState = "OUTSIDE" | "INSIDE" | "LOADING";
 // ============================================
 
 export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
-  // ----------------------------------------
-  // STATE
-  // ----------------------------------------
+  const cardRef = useRef<HTMLDivElement>(null);
+  const qrIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
   const [qrPayload, setQrPayload] = useState<string>(initialQrData.payload);
   const [accessState, setAccessState] = useState<AccessState>("LOADING");
   const [isOffline, setIsOffline] = useState(false);
@@ -53,48 +54,110 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
-  const supabase = createClient();
-  const qrIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Track strap paths with state for re-renders
+  const [leftPath, setLeftPath] = useState("M 15 0 Q 50 50 50 100");
+  const [rightPath, setRightPath] = useState("M 85 0 Q 50 50 50 100");
+  const [strapLen, setStrapLen] = useState(120);
 
-  // ----------------------------------------
-  // SECURITY: LIVE CLOCK (Anti-Screenshot)
-  // ----------------------------------------
+  const supabase = useMemo(() => createClient(), []);
+
+  // ============================================
+  // PHYSICS - Spring values for smooth return to center
+  // ============================================
+
+  const cardX = useMotionValue(0);
+  const cardY = useMotionValue(0);
+
+  // Spring physics - SMOOTHER return to center
+  const springConfig = useMemo(
+    () => ({ stiffness: 80, damping: 18, mass: 0.8 }),
+    []
+  );
+
+  const springX = useSpring(cardX, springConfig);
+  const springY = useSpring(cardY, springConfig);
+
+  // Base dimensions - longer strap = card more centered on screen
+  const baseStrapLength = isMobile ? 250 : 300;
+  const cardWidth = isMobile ? 280 : 320;
+  const cardHeight = isMobile ? 420 : 480;
+
+  // ============================================
+  // UPDATE STRAPS - Smooth updates using RAF
+  // ============================================
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    let rafId: number;
+
+    const updateStraps = () => {
+      const x = springX.get();
+      const y = springY.get();
+
+      // Strap length increases with Y movement (no limit)
+      const newLength = baseStrapLength + y * 0.8;
+      setStrapLen(Math.max(80, newLength));
+
+      // BOTH straps end at EXACT CENTER (50) - NO offset
+      const centerX = 50;
+
+      // Control points for symmetric professional curves
+      const leftCp1X = 35 + (x / cardWidth) * 5;
+      const leftCp1Y = 50 + (y / baseStrapLength) * 3;
+      const rightCp1X = 65 + (x / cardWidth) * 5;
+      const rightCp1Y = 50 + (y / baseStrapLength) * 3;
+
+      // BOTH straps meet at EXACT CENTER (50)
+      setLeftPath(`M 25 0 Q ${leftCp1X} ${leftCp1Y} ${centerX} 100`);
+      setRightPath(`M 75 0 Q ${rightCp1X} ${rightCp1Y} ${centerX} 100`);
+
+      rafId = requestAnimationFrame(updateStraps);
+    };
+
+    rafId = requestAnimationFrame(updateStraps);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [springX, springY, baseStrapLength, cardWidth]);
+
+  // ============================================
+  // EFFECTS
+  // ============================================
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || "ontouchstart" in window);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // ----------------------------------------
-  // QR CODE REFRESH (Server-side generation)
-  // ----------------------------------------
   const refreshQrPayload = useCallback(async () => {
     if (isRefreshing || isOffline) return;
-
     setIsRefreshing(true);
     try {
-      // Fetch new QR code from server API
       const response = await fetch("/api/qr/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id }),
       });
-
       if (response.ok) {
         const data = await response.json();
         setQrPayload(data.payload);
       }
-    } catch (error) {
-      console.error("Failed to refresh QR:", error);
+    } catch {
+      // Silent
     } finally {
       setIsRefreshing(false);
     }
   }, [user.id, isRefreshing, isOffline]);
 
-  // ----------------------------------------
-  // INITIAL ACCESS STATE CHECK
-  // ----------------------------------------
   const checkInitialAccessState = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -116,15 +179,11 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
       } else {
         setAccessState("OUTSIDE");
       }
-    } catch (err) {
-      console.error("Initial state check failed:", err);
+    } catch {
       setAccessState("OUTSIDE");
     }
   }, [supabase, user.id]);
 
-  // ----------------------------------------
-  // REALTIME SUBSCRIPTION
-  // ----------------------------------------
   const setupRealtimeSubscription = useCallback(() => {
     const channel = supabase
       .channel(`access-logs-${user.id}`)
@@ -138,7 +197,6 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
         },
         (payload) => {
           const newLog = payload.new as { type: string; timestamp: string };
-
           if (newLog.type === "ENTRY") {
             setAccessState("INSIDE");
             setLastEntry(new Date(newLog.timestamp));
@@ -149,39 +207,28 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
         }
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
   }, [supabase, user.id]);
 
-  // ----------------------------------------
-  // CONNECTIVITY MONITORING
-  // ----------------------------------------
   const setupConnectivityMonitor = useCallback(() => {
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
-
     setIsOffline(!navigator.onLine);
-
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
 
-  // ----------------------------------------
-  // EFFECTS
-  // ----------------------------------------
   useEffect(() => {
     qrIntervalRef.current = setInterval(refreshQrPayload, 15000);
     checkInitialAccessState();
     const unsubscribeRealtime = setupRealtimeSubscription();
     const unsubscribeConnectivity = setupConnectivityMonitor();
-
     return () => {
       if (qrIntervalRef.current) clearInterval(qrIntervalRef.current);
       unsubscribeRealtime();
@@ -194,221 +241,313 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
     setupConnectivityMonitor,
   ]);
 
-  // ----------------------------------------
-  // RENDER: Loading State
-  // ----------------------------------------
+  // ============================================
+  // DRAG HANDLERS
+  // ============================================
+
+  const handleDrag = useCallback(
+    (_: unknown, info: { offset: { x: number; y: number } }) => {
+      // Update motion values during drag
+      cardX.set(info.offset.x);
+      cardY.set(info.offset.y);
+    },
+    [cardX, cardY]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    // SPRING BACK TO CENTER - This is the key!
+    cardX.set(0);
+    cardY.set(0);
+  }, [cardX, cardY]);
+
+  const handleFlip = useCallback(() => {
+    setIsFlipped((prev) => !prev);
+  }, []);
+
+  // ============================================
+  // LOADING STATE
+  // ============================================
   if (accessState === "LOADING" || !qrPayload) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
+      <div className="h-screen flex items-center justify-center bg-white">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
   }
 
-  // ----------------------------------------
-  // RENDER: Inside State (Entry Success + QR for Exit)
-  // ----------------------------------------
-  if (accessState === "INSIDE") {
-    return (
-      <div
-        className="min-h-[100dvh] flex flex-col items-center justify-center bg-gray-50 p-4 pb-24 overflow-hidden"
-        onContextMenu={(e) => e.preventDefault()}
+  const isInside = accessState === "INSIDE";
+  const strapColor = "#22C55E"; // Green straps
+
+  // Card top position = exactly where straps end
+  const cardTop = strapLen;
+
+  return (
+    <div
+      className="min-h-screen min-h-[100dvh] bg-white flex flex-col items-center relative overflow-hidden select-none"
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* SVG Straps - ON TOP of card (z-20) */}
+      <svg
+        className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+        style={{
+          top: 0,
+          width: cardWidth * 1.3,
+          height: strapLen,
+        }}
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
       >
-        {/* Background Animation */}
-        <div className="absolute inset-0 z-0 overflow-hidden">
-          <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-500/20 via-transparent to-transparent animate-pulse-slow" />
+        {/* Left Strap Shadow */}
+        <path
+          d={leftPath}
+          fill="none"
+          stroke="rgba(0,0,0,0.15)"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+        {/* Left Strap */}
+        <path
+          d={leftPath}
+          fill="none"
+          stroke={strapColor}
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+
+        {/* Right Strap Shadow */}
+        <path
+          d={rightPath}
+          fill="none"
+          stroke="rgba(0,0,0,0.15)"
+          strokeWidth="8"
+          strokeLinecap="round"
+        />
+        {/* Right Strap */}
+        <path
+          d={rightPath}
+          fill="none"
+          stroke={strapColor}
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+      </svg>
+
+      {/* Glassmorphic Clip at Top Center - Fixed */}
+      <div
+        className="absolute left-1/2 -translate-x-1/2 z-30"
+        style={{ top: strapLen + 3 }}
+      >
+        <div
+          className="
+      rounded-lg
+      flex items-center justify-center
+      backdrop-blur-xl
+      border border-white/60
+      shadow-lg
+    "
+          style={{
+            width: isMobile ? 50 : 60,
+            height: isMobile ? 22 : 26,
+            background:
+              "linear-gradient(145deg, rgba(255,255,255,0.55), rgba(255,255,255,0.25))",
+          }}
+        >
+          <div className="w-3 h-3 bg-white/70 rounded-full border border-white/80 shadow-inner" />
         </div>
+      </div>
 
-        <CardContainer className="inter-var w-full max-w-sm">
-          <CardBody className="bg-white relative group/card border-emerald-100 w-full h-auto rounded-xl p-6 border shadow-xl">
-            {/* Status Badge */}
-            <CardItem translateZ="50" className="w-full flex justify-center">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-full text-sm font-medium">
-                <CheckCircle2 className="h-4 w-4" />
-                You&apos;re Inside
-              </div>
-            </CardItem>
+      {/* Main Card */}
+      <motion.div
+        ref={cardRef}
+        drag
+        dragElastic={0}
+        dragMomentum={false}
+        initial={{ y: -400 }}
+        animate={{ y: 0 }}
+        transition={{
+          type: "spring",
+          stiffness: 100,
+          damping: 15,
+          delay: 0.2,
+        }}
+        className="absolute z-10 cursor-grab active:cursor-grabbing touch-none"
+        style={{
+          top: cardTop,
+          left: "50%",
+          translateX: "-50%",
+          x: springX,
+          y: springY,
+          width: cardWidth,
+          height: cardHeight,
+        }}
+        onDrag={handleDrag}
+        onDragEnd={handleDragEnd}
+        onClick={handleFlip}
+      >
+        {/* Card flip container */}
+        <motion.div
+          className="relative w-full h-full"
+          style={{
+            transformStyle: "preserve-3d",
+            perspective: 1200,
+          }}
+          animate={{ rotateY: isFlipped ? 180 : 0 }}
+          transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+        >
+          {/* ============ FRONT SIDE ============ */}
+          <div
+            className="absolute inset-0 bg-white rounded-3xl shadow-2xl overflow-hidden"
+            style={{ backfaceVisibility: "hidden" }}
+          >
+            {/* Clip hole */}
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-4 bg-gray-200 rounded-full shadow-inner z-10" />
 
-            {/* Welcome Message */}
-            <CardItem translateZ="40" className="w-full text-center mt-4">
-              <h1 className="text-xl font-bold text-slate-900">
-                Welcome, {user.fullName || "Guest"}!
-              </h1>
-              {lastEntry && (
-                <p className="text-sm text-slate-500 mt-1">
-                  Entered at{" "}
-                  {lastEntry.toLocaleTimeString("en-US", { hour12: true })}
-                </p>
-              )}
-            </CardItem>
-
-            {/* QR Code for Exit */}
-            <CardItem
-              translateZ="100"
-              className="w-full flex flex-col items-center py-4"
-            >
-              <p className="text-xs text-slate-500 mb-3">
-                Show this code at exit to check out
+            {/* Primary color header */}
+            <div className="bg-primary pt-8 pb-4 px-2 text-center">
+              <p className="text-white/80 font-mono text-[10px] tracking-[0.15em] uppercase font-medium">
+                Department of Computer Science
               </p>
+              <h1 className="text-white font-mono text-sm font-bold mt-1 tracking-tight">
+                ANNUAL DINNER 2025
+              </h1>
+            </div>
+
+            {/* Offline banner */}
+            {isOffline && (
+              <div className="bg-yellow-50 py-2 flex items-center justify-center gap-2 text-yellow-700">
+                <WifiOff className="h-3 w-3" />
+                <span className="text-xs font-semibold">Offline Mode</span>
+              </div>
+            )}
+
+            {/* QR Code Section */}
+            <div className="flex-1 flex flex-col items-center justify-center mt-5 p-6">
               <div
-                className={cn(
-                  "p-3 bg-white rounded-xl border-4 transition-all duration-300 shadow-inner",
-                  isOffline ? "border-yellow-400" : "border-emerald-200"
-                )}
+                className={`p-4 bg-white rounded-2xl border-2 ${
+                  isOffline
+                    ? "border-yellow-400"
+                    : isInside
+                    ? "border-emerald-400"
+                    : "border-gray-200"
+                } shadow-lg`}
               >
                 <QRCodeSVG
                   value={qrPayload}
-                  size={200}
+                  size={isMobile ? 200 : 220}
                   level="H"
-                  includeMargin={true}
-                  className="rounded-lg"
+                  includeMargin={false}
                 />
               </div>
-            </CardItem>
 
-            {/* Status */}
-            <CardItem translateZ="30" className="w-full flex justify-center">
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                {isOffline ? (
-                  <>
-                    <WifiOff className="h-3 w-3" />
-                    Offline Mode
-                  </>
-                ) : (
-                  <>
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    Live Code
-                  </>
-                )}
+              {/* Status */}
+            </div>
+          </div>
+
+          {/* ============ BACK SIDE ============ */}
+          <div
+            className="absolute inset-0 bg-white rounded-3xl shadow-2xl overflow-hidden"
+            style={{
+              backfaceVisibility: "hidden",
+              transform: "rotateY(180deg)",
+            }}
+          >
+            {/* Clip hole */}
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 w-10 h-4 bg-gray-200 rounded-full shadow-inner z-10" />
+
+            {/* Back content */}
+            <div className="h-full flex flex-col items-center p-5 pt-8">
+              {/* University Logo */}
+              <div className="w-45 h-15 overflow-hidden mb-4">
+                <Image
+                  src="/UniversityLogo.jpeg"
+                  alt="University Logo"
+                  width={60}
+                  height={60}
+                  className="w-full h-full object-cover"
+                />
               </div>
-            </CardItem>
-          </CardBody>
-        </CardContainer>
-      </div>
-    );
-  }
 
-  // ----------------------------------------
-  // RENDER: Outside State (Show QR)
-  // ----------------------------------------
-  return (
-    <div
-      className="min-h-[100dvh] flex flex-col items-center justify-center bg-gray-50 p-4 pb-24 overflow-hidden" // Added overflow-hidden
-      onContextMenu={(e) => e.preventDefault()} // Disable Right Click
-    >
-      {/* SECURITY: Pulsing Background Animation */}
-      <div className="absolute inset-0 z-0 overflow-hidden">
-        <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent animate-pulse-slow" />
-      </div>
-
-      <CardContainer className="inter-var w-full max-w-sm">
-        <CardBody className="bg-gray-50 relative group/card  dark:hover:shadow-2xl dark:hover:shadow-emerald-500/[0.1] dark:bg-black dark:border-white/[0.2] border-black/[0.1] w-full h-auto rounded-xl p-6 border">
-          {/* Live Header */}
-          {/* Offline Indicator (Non-blocking) */}
-          {isOffline && (
-            <CardItem
-              translateZ="50"
-              className="w-full bg-yellow-50 p-3 border-b border-yellow-100 flex items-center justify-center gap-2 text-yellow-700 animate-in slide-in-from-top duration-300 rounded-t-xl"
-            >
-              <WifiOff className="h-4 w-4" />
-              <span className="text-xs font-semibold">
-                Offline Mode • Using last valid code
-              </span>
-            </CardItem>
-          )}
-
-          {/* User Info */}
-          <div className="p-6 pb-2 bg-white rounded-t-xl">
-            <CardItem
-              translateZ="50"
-              className="w-full flex justify-center mb-6 border-b border-slate-100 pb-4"
-            >
-              <Image
-                src="/UniversityLogo.jpeg"
-                alt="University"
-                width={200}
-                height={100}
-                className="object-contain"
-              />
-            </CardItem>
-
-            <div className="flex items-center gap-2">
-              <CardItem
-                translateZ="60"
-                className="relative w-20 h-20 flex-shrink-0"
-              >
+              {/* Student Photo */}
+              <div className="relative w-16 h-16 rounded-full overflow-hidden border-3 border-primary/20 shadow-lg mb-3">
                 {user.profilePhotoUrl ? (
                   <Image
                     src={user.profilePhotoUrl}
                     alt="Profile"
                     fill
-                    className="rounded-full object-cover border-4 border-slate-100 shadow-sm"
+                    className="object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full rounded-full bg-slate-200" />
+                  <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/30 flex items-center justify-center text-primary font-bold text-xl">
+                    {user.fullName?.charAt(0) || "S"}
+                  </div>
                 )}
-                {/* Active Indicator */}
-                <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full animate-bounce" />
-              </CardItem>
+              </div>
 
-              <CardItem
-                translateZ="50"
-                className="flex-1 min-w-0 text-left ml-4"
-              >
-                <h2 className="text-xl font-bold text-slate-900 truncate">
-                  {user.fullName}
-                </h2>
-                <p className="text-sm text-slate-500 font-mono mt-1">
-                  {user.sapId}
+              {/* Student Info */}
+              <div className="text-center space-y-0.5 mb-3">
+                <p className="text-base font-bold text-gray-800">
+                  {user.fullName || "Student"}
                 </p>
-              </CardItem>
+
+                <Badge className="text-xs font-mono">{user.gender}</Badge>
+              </div>
+
+              {/* Info Cards */}
+              <div className="flex gap-3 w-full">
+                {user.section && (
+                  <div className="flex-1 bg-gray-50 rounded-xl p-3 text-center">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">
+                      SapId
+                    </p>
+                    <p className="text-lg font-bold text-gray-800">
+                      {user.sapId}
+                    </p>
+                  </div>
+                )}
+                {isInside && lastEntry && (
+                  <div className="flex-1 bg-emerald-50 rounded-xl p-3 text-center">
+                    <p className="text-[10px] text-emerald-600 uppercase tracking-wider">
+                      Entry
+                    </p>
+                    <p className="text-lg font-bold text-emerald-700">
+                      {lastEntry.toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Live clock */}
+              <div className="mt-auto pt-3">
+                <p className="text-xs text-gray-400 font-mono text-center">
+                  {currentTime.toLocaleTimeString("en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: true,
+                  })}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-2 text-center">
+                  Tap to flip back
+                </p>
+              </div>
             </div>
           </div>
+        </motion.div>
+      </motion.div>
 
-          {/* QR Code Section */}
-          <div className="py-4 bg-white flex flex-col items-center rounded-b-xl">
-            <CardItem
-              translateZ="100"
-              className={cn(
-                "p-4 bg-white rounded-xl border-4 transition-all duration-300 shadow-inner",
-                isOffline ? "border-yellow-400" : "border-primary/20"
-              )}
-            >
-              <div className="relative">
-                <QRCodeSVG
-                  value={qrPayload}
-                  size={320}
-                  level="H"
-                  includeMargin={true}
-                  className="rounded-lg"
-                />
-                {/* Holographic Overlay Effect (CSS) */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent opacity-0 animate-shimmer pointer-events-none" />
-              </div>
-            </CardItem>
-
-            {/* Status Text */}
-            <CardItem translateZ="60" className="mt-4 flex items-center gap-2">
-              {isRefreshing ? (
-                <span className="text-xs text-primary flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Refreshing code...
-                </span>
-              ) : isOffline ? (
-                <span className="text-xs text-yellow-600 flex items-center gap-1 font-medium">
-                  <WifiOff className="h-3 w-3" />
-                  Offline • Auto-reconnects
-                </span>
-              ) : (
-                <span className="text-xs text-slate-400 flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  Live Code • Auto-updates
-                </span>
-              )}
-            </CardItem>
-          </div>
-        </CardBody>
-      </CardContainer>
+      {/* Hint */}
+      <motion.p
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-xs font-medium z-20"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0.4, 0.7, 0.4] }}
+        transition={{ delay: 2, duration: 2, repeat: Infinity }}
+      >
+        Drag to swing • Tap to flip
+      </motion.p>
     </div>
   );
 }

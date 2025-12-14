@@ -4,23 +4,40 @@ import { useEffect, useState } from "react";
 import { getManagerSummary, ManagerSummary } from "@/actions/manager-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Wallet, Users, FileText, Loader2 } from "lucide-react";
+import {
+  Download,
+  Wallet,
+  Users,
+  FileText,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import Image from "next/image";
+import { generateManagerSummaryPDF } from "@/lib/pdf-generator";
+
+const STUDENTS_PER_PAGE = 10;
 
 export default function SummaryPage() {
   const [summary, setSummary] = useState<ManagerSummary | null>(null);
-  const [isPrinting, setIsPrinting] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     getManagerSummary().then(setSummary);
   }, []);
 
-  const handlePrint = () => {
-    setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setIsPrinting(false);
-    }, 100);
+  const handleDownloadPDF = () => {
+    if (!summary) return;
+
+    setIsGenerating(true);
+    try {
+      generateManagerSummaryPDF(summary);
+    } catch (error) {
+      console.error("Failed to generate PDF:", error);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   if (!summary) {
@@ -32,6 +49,14 @@ export default function SummaryPage() {
   }
 
   const currentDate = new Date();
+
+  // Pagination logic
+  const totalStudents = summary.students.length;
+  const totalPages = Math.ceil(totalStudents / STUDENTS_PER_PAGE);
+  const startIndex = (currentPage - 1) * STUDENTS_PER_PAGE;
+  const endIndex = startIndex + STUDENTS_PER_PAGE;
+  const paginatedStudents = summary.students.slice(startIndex, endIndex);
+  const showPagination = totalStudents > STUDENTS_PER_PAGE;
 
   return (
     <>
@@ -62,7 +87,7 @@ export default function SummaryPage() {
         }
       `}</style>
 
-      <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 md:space-y-6">
+      <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4 md:space-y-6 pb-24 md:pb-6">
         {/* Screen Header - Hidden in Print */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print-hide">
           <div>
@@ -74,11 +99,11 @@ export default function SummaryPage() {
             </p>
           </div>
           <Button
-            onClick={handlePrint}
-            disabled={isPrinting}
+            onClick={handleDownloadPDF}
+            disabled={isGenerating}
             className="w-full sm:w-auto"
           >
-            {isPrinting ? (
+            {isGenerating ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Download className="mr-2 h-4 w-4" />
@@ -89,67 +114,6 @@ export default function SummaryPage() {
 
         {/* Printable Content */}
         <div className="space-y-4 md:space-y-6 bg-white print:p-0">
-          {/* Header with Logo */}
-          <div className="text-center space-y-2 pb-4 border-b-2 border-primary/20 print-break-inside-avoid">
-            <div className="flex justify-center">
-              <Image
-                src="/UniversityLogo.jpeg"
-                alt="University Logo"
-                width={80}
-                height={80}
-                className="print:w-16 print:h-16"
-              />
-            </div>
-            <h2 className="text-xl md:text-2xl font-bold text-primary print:text-black">
-              Manager Collection Report
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              SENTINEL Access Control System
-            </p>
-          </div>
-
-          {/* Manager Info - Responsive Grid */}
-          <Card className="border-primary/10 shadow-sm print:shadow-none print:border print-break-inside-avoid">
-            <CardHeader className="pb-2 px-4">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Report Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">Manager</p>
-                  <p className="font-semibold truncate">
-                    {summary.manager.fullName || "Unknown"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Section</p>
-                  <p className="font-semibold">
-                    {summary.manager.section || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Semester</p>
-                  <p className="font-semibold">
-                    {summary.manager.semester || "N/A"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Date</p>
-                  <p className="font-semibold">
-                    {currentDate.toLocaleDateString("en-PK", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Stats Cards - Responsive */}
           <div className="grid grid-cols-2 gap-3 md:gap-4 print-break-inside-avoid">
             <Card className="border-2 border-emerald-100 shadow-none">
@@ -189,21 +153,27 @@ export default function SummaryPage() {
             </Card>
           </div>
 
-          {/* Student List - Proper Table for PDF */}
+          {/* Student List */}
           {summary.students.length > 0 && (
             <Card className="shadow-none print:border">
               <CardHeader className="pb-2 px-4">
-                <CardTitle className="text-sm font-medium">
-                  Pass Recipients ({summary.students.length} students)
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium">
+                    Pass Recipients ({summary.students.length} students)
+                  </CardTitle>
+                  {showPagination && (
+                    <p className="text-xs text-muted-foreground print-hide">
+                      Showing {startIndex + 1}-
+                      {Math.min(endIndex, totalStudents)} of {totalStudents}
+                    </p>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="p-0 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/50 border-b">
-                      <th className="text-left font-semibold px-4 py-2 w-12">
-                        #
-                      </th>
+                      <th className="text-left font-semibold px-4 py-2">#</th>
                       <th className="text-left font-semibold px-4 py-2">
                         Full Name
                       </th>
@@ -213,22 +183,22 @@ export default function SummaryPage() {
                       <th className="text-right font-semibold px-4 py-2">
                         Amount
                       </th>
-                      <th className="text-right font-semibold px-4 py-2 hidden md:table-cell">
-                        Date
+                      <th className="text-right font-semibold px-4 py-2">
+                        Date & Time
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {summary.students.map((student, index) => (
+                    {paginatedStudents.map((student, index) => (
                       <tr
                         key={student.id}
-                        className="border-b last:border-0 print-break-inside-avoid"
+                        className="border-b last:border-0 print-break-inside-avoid hover:bg-muted/30 transition-colors"
                       >
                         <td className="px-4 py-2 font-mono text-muted-foreground text-xs">
-                          {index + 1}
+                          {startIndex + index + 1}
                         </td>
                         <td className="px-4 py-2">
-                          <div className="font-medium truncate max-w-[150px] md:max-w-none">
+                          <div className="font-medium truncate max-w-[100px] md:max-w-none">
                             {student.fullName || "Unknown"}
                           </div>
                           <div className="text-xs text-muted-foreground sm:hidden font-mono">
@@ -241,14 +211,28 @@ export default function SummaryPage() {
                         <td className="px-4 py-2 text-right font-medium text-emerald-600">
                           Rs. {summary.stats.ticketPrice}
                         </td>
-                        <td className="px-4 py-2 text-right text-muted-foreground text-xs hidden md:table-cell">
-                          {new Date(student.createdAt).toLocaleDateString(
-                            "en-PK",
-                            {
-                              day: "2-digit",
-                              month: "short",
-                            }
-                          )}
+                        <td className="px-4 py-2 text-right text-xs">
+                          <div className="flex flex-col items-end">
+                            <span className="font-medium text-foreground">
+                              {new Date(student.createdAt).toLocaleDateString(
+                                "en-PK",
+                                {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                }
+                              )}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {new Date(student.createdAt).toLocaleTimeString(
+                                "en-PK",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -256,7 +240,7 @@ export default function SummaryPage() {
                   <tfoot>
                     <tr className="bg-muted/30 font-semibold">
                       <td
-                        colSpan={2}
+                        colSpan={3}
                         className="px-4 py-3 text-right sm:hidden"
                       >
                         Total:
@@ -270,10 +254,59 @@ export default function SummaryPage() {
                       <td className="px-4 py-3 text-right text-emerald-600 font-bold">
                         Rs. {summary.stats.cashCollected.toLocaleString()}
                       </td>
-                      <td className="hidden md:table-cell"></td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>
+
+                {/* Pagination Controls */}
+                {showPagination && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t print-hide">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="gap-1"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      <span className="hidden sm:inline">Previous</span>
+                    </Button>
+
+                    <div className="flex items-center gap-2">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                        (page) => (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "ghost"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                            className={`w-8 h-8 p-0 ${
+                              currentPage === page
+                                ? ""
+                                : "text-muted-foreground"
+                            }`}
+                          >
+                            {page}
+                          </Button>
+                        )
+                      )}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                      className="gap-1"
+                    >
+                      <span className="hidden sm:inline">Next</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -287,15 +320,6 @@ export default function SummaryPage() {
               </CardContent>
             </Card>
           )}
-
-          {/* Footer */}
-          <div className="text-center text-xs text-muted-foreground pt-4 border-t space-y-1 print-break-inside-avoid">
-            <p className="font-medium">
-              Generated: {currentDate.toLocaleString("en-PK")}
-            </p>
-            <p>SENTINEL Access Control System</p>
-            <p className="text-[10px]">Confidential Financial Document</p>
-          </div>
         </div>
       </div>
     </>

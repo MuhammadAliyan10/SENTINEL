@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { safeAuditLog } from "@/lib/audit";
 import { createClient } from "@/lib/supabase/server";
 import { headers } from "next/headers";
 import { cache } from "react";
@@ -94,7 +95,7 @@ export async function getManagerAuth() {
 
 /**
  * Log a successful admin/manager login
- * Called from login pages after successful authentication
+ * Uses safeAuditLog to prevent FK crashes if user record is missing
  */
 export async function logSuccessfulLogin(userId: string, role: string) {
   try {
@@ -102,14 +103,13 @@ export async function logSuccessfulLogin(userId: string, role: string) {
     const ip = headersList.get("x-forwarded-for") || "unknown";
     const userAgent = headersList.get("user-agent") || "unknown";
 
-    await prisma.auditLog.create({
-      data: {
-        action: "LOGIN_SUCCESS",
-        performerId: userId,
-        details: `${role} logged in successfully`,
-        ipAddress: ip,
-        userAgent: userAgent,
-      },
+    // Use safe audit log to prevent FK crashes
+    await safeAuditLog({
+      performerId: userId,
+      action: "LOGIN_SUCCESS",
+      details: `${role} logged in successfully`,
+      ipAddress: ip,
+      userAgent: userAgent,
     });
   } catch (error) {
     // Don't fail login if audit log fails
@@ -285,30 +285,32 @@ export async function loginAdmin(formData: FormData) {
 
     if (!dbUser || !dbUser.isActive) {
       await supabase.auth.signOut();
-      await prisma.auditLog.create({
-        data: {
-          performerId: authData.user.id,
-          action: "LOGIN_FAILED_ADMIN",
-          details: JSON.stringify({
-            email: sanitizedEmail,
-            reason: "Account not found or inactive",
-          }),
-        },
+      // Use safe audit log - won't crash if user record is missing
+      await safeAuditLog({
+        performerId: authData.user.id,
+        action: "LOGIN_FAILED_ADMIN",
+        details: JSON.stringify({
+          email: sanitizedEmail,
+          reason: "Account not found or inactive",
+        }),
       });
-      return { error: "Account not found or inactive" };
+      // Provide specific error for missing user record
+      return {
+        error: !dbUser
+          ? "User record missing. Contact Admin."
+          : "Account not found or inactive",
+      };
     }
 
     if (dbUser.role !== "SUPER_ADMIN") {
       await supabase.auth.signOut();
-      await prisma.auditLog.create({
-        data: {
-          performerId: authData.user.id,
-          action: "LOGIN_FAILED_ADMIN",
-          details: JSON.stringify({
-            email: sanitizedEmail,
-            reason: `Unauthorized role: ${dbUser.role}`,
-          }),
-        },
+      await safeAuditLog({
+        performerId: authData.user.id,
+        action: "LOGIN_FAILED_ADMIN",
+        details: JSON.stringify({
+          email: sanitizedEmail,
+          reason: `Unauthorized role: ${dbUser.role}`,
+        }),
       });
       return { error: "Access Denied: Administrator privileges required" };
     }
@@ -415,31 +417,33 @@ export async function loginManager(formData: FormData) {
 
     if (!dbUser || !dbUser.isActive) {
       await supabase.auth.signOut();
-      await prisma.auditLog.create({
-        data: {
-          performerId: authData.user.id,
-          action: "LOGIN_FAILED_MANAGER",
-          details: JSON.stringify({
-            email: sanitizedEmail,
-            reason: "Account not found or inactive",
-          }),
-        },
+      // Use safe audit log - won't crash if user record is missing
+      await safeAuditLog({
+        performerId: authData.user.id,
+        action: "LOGIN_FAILED_MANAGER",
+        details: JSON.stringify({
+          email: sanitizedEmail,
+          reason: "Account not found or inactive",
+        }),
       });
-      return { error: "Account not found or inactive" };
+      // Provide specific error for missing user record
+      return {
+        error: !dbUser
+          ? "User record missing. Contact Admin."
+          : "Account not found or inactive",
+      };
     }
 
     const validRoles = ["CR", "GR", "SUPER_ADMIN"];
     if (!validRoles.includes(dbUser.role)) {
       await supabase.auth.signOut();
-      await prisma.auditLog.create({
-        data: {
-          performerId: authData.user.id,
-          action: "LOGIN_FAILED_MANAGER",
-          details: JSON.stringify({
-            email: sanitizedEmail,
-            reason: `Unauthorized role: ${dbUser.role}`,
-          }),
-        },
+      await safeAuditLog({
+        performerId: authData.user.id,
+        action: "LOGIN_FAILED_MANAGER",
+        details: JSON.stringify({
+          email: sanitizedEmail,
+          reason: `Unauthorized role: ${dbUser.role}`,
+        }),
       });
       return { error: "Access Denied: Manager privileges required" };
     }

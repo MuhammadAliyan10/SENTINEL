@@ -125,7 +125,7 @@ _Please keep this token secure._`;
           ISSUE NEW PASS
         </Button>
       </DrawerTrigger>
-      <DrawerContent className="max-h-[90vh]">
+      <DrawerContent className={result ? "min-h-[85vh]" : ""}>
         <div className="mx-auto w-full max-w-sm">
           <DrawerHeader>
             <DrawerTitle>Issue New Pass</DrawerTitle>

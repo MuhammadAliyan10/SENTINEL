@@ -11,6 +11,7 @@ import {
   Upload,
   UserCog,
   FileSearch,
+  Shield,
 } from "lucide-react";
 import {
   Sidebar,
@@ -63,7 +64,11 @@ const navItems = [
     href: "/admin/students",
     icon: Users,
   },
-
+  {
+    title: "Guards",
+    href: "/admin/guards",
+    icon: Shield,
+  },
   {
     title: "Audit Logs",
     href: "/admin/audit",

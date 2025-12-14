@@ -1,199 +1,158 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Activity,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  RotateCcw,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { requireSuperAdminPage } from "@/actions/auth-actions";
+import { Suspense } from "react";
+import { prisma } from "@/lib/prisma";
+import { requireSuperAdmin } from "@/actions/auth-actions";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 
-// Mock entry logs data
-const mockLogs = [
-  {
-    id: "1",
-    studentName: "Ahmed Khan",
-    studentId: "2024-CS-001",
-    status: "allowed",
-    location: "Main Gate",
-    time: "2024-12-12T10:30:00Z",
-    guardDevice: "GATE-01",
-  },
-  {
-    id: "2",
-    studentName: "Sara Ali",
-    studentId: "2024-CS-002",
-    status: "allowed",
-    location: "Library Entrance",
-    time: "2024-12-12T10:25:00Z",
-    guardDevice: "LIB-01",
-  },
-  {
-    id: "3",
-    studentName: "Muhammad Zain",
-    studentId: "2024-EE-015",
-    status: "rejected",
-    location: "Main Gate",
-    time: "2024-12-12T10:20:00Z",
-    guardDevice: "GATE-01",
-  },
-  {
-    id: "4",
-    studentName: "Fatimah Hassan",
-    studentId: "2024-CS-003",
-    status: "re-entry",
-    location: "Main Gate",
-    time: "2024-12-12T10:15:00Z",
-    guardDevice: "GATE-02",
-  },
-];
+// Components
+import { AuditStats } from "@/components/features/admin/audit/AuditStats";
+import { SystemLogsClient } from "@/components/features/admin/audit/SystemLogsClient";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-function StatusIcon({ status }: { status: string }) {
-  switch (status) {
-    case "allowed":
-      return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-    case "rejected":
-      return <XCircle className="h-4 w-4 text-red-600" />;
-    case "re-entry":
-      return <RotateCcw className="h-4 w-4 text-amber-600" />;
-    default:
-      return null;
-  }
+export const dynamic = "force-dynamic";
+
+// ============================================
+// DATA FETCHING
+// ============================================
+
+async function getAuditStats() {
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  const HIGH_RISK_ACTIONS = [
+    "DELETE_MANAGER",
+    "REVOKE_ACCESS",
+    "MANUAL_PAYMENT",
+    "MANUAL_CHECKIN",
+    "FREEZE_MANAGER",
+  ];
+
+  const [totalActions24h, highRiskActions, uniqueAdmins] = await Promise.all([
+    prisma.auditLog.count({
+      where: { timestamp: { gte: yesterday } },
+    }),
+    prisma.auditLog.count({
+      where: {
+        timestamp: { gte: yesterday },
+        action: { in: HIGH_RISK_ACTIONS },
+      },
+    }),
+    prisma.auditLog
+      .groupBy({
+        by: ["performerId"],
+        where: { timestamp: { gte: todayStart } },
+      })
+      .then((result) => result.length),
+  ]);
+
+  return { totalActions24h, highRiskActions, uniqueAdmins };
 }
 
-function getStatusBadgeClass(status: string): string {
-  switch (status) {
-    case "allowed":
-      return "bg-green-50 text-green-700 border-green-200";
-    case "rejected":
-      return "bg-red-50 text-red-700 border-red-200";
-    case "re-entry":
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    default:
-      return "";
-  }
+async function getInitialLogs() {
+  const [logs, total] = await Promise.all([
+    prisma.auditLog.findMany({
+      orderBy: { timestamp: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        timestamp: true,
+        action: true,
+        targetId: true,
+        details: true,
+        ipAddress: true,
+        performer: {
+          select: {
+            fullName: true,
+            profilePhotoUrl: true,
+          },
+        },
+      },
+    }),
+    prisma.auditLog.count(),
+  ]);
+
+  return { logs, total };
 }
 
-export default async function LogsPage() {
-  // Defense-in-depth: Explicit auth check
-  await requireSuperAdminPage();
+// ============================================
+// LOADING SKELETON
+// ============================================
+
+function StatsSkeleton() {
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      {[...Array(3)].map((_, i) => (
+        <Skeleton key={i} className="h-32 rounded-xl" />
+      ))}
+    </div>
+  );
+}
+
+// ============================================
+// SERVER COMPONENT
+// ============================================
+
+async function AuditDashboard() {
+  const [stats, initialLogs] = await Promise.all([
+    getAuditStats(),
+    getInitialLogs(),
+  ]);
+
+  return (
+    <div className="space-y-6">
+      <AuditStats
+        totalActions24h={stats.totalActions24h}
+        highRiskActions={stats.highRiskActions}
+        uniqueAdmins={stats.uniqueAdmins}
+      />
+      <Card className="bg-white border-border shadow-sm">
+        <CardHeader>
+          <CardTitle>Audit Trail</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Detailed log of all system activities
+          </p>
+        </CardHeader>
+        <CardContent>
+          <SystemLogsClient
+            initialLogs={initialLogs.logs}
+            initialTotal={initialLogs.total}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================================
+// PAGE
+// ============================================
+
+export default async function SystemLogsPage() {
+  await requireSuperAdmin();
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Scan Logs</h1>
-        <p className="text-muted-foreground mt-1">
-          Monitor real-time entry and exit activity
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">System Logs</h1>
+          <p className="text-muted-foreground mt-1">
+            Immutable history of all administrative actions
+          </p>
+        </div>
+        <Button variant="outline" className="gap-2">
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-white border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Today&apos;s Entries
-            </CardTitle>
-            <Activity className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">156</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Allowed
-            </CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">142</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Rejected
-            </CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">8</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Re-entries
-            </CardTitle>
-            <RotateCcw className="h-4 w-4 text-amber-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-600">6</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Logs */}
-      <Card className="bg-white border-border shadow-sm">
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>
-            Real-time scan events from all gates
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {mockLogs.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <StatusIcon status={log.status} />
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {log.studentName}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {log.studentId} • {log.location}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Badge
-                    variant="outline"
-                    className={getStatusBadgeClass(log.status)}
-                  >
-                    {log.status}
-                  </Badge>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {new Date(log.time).toLocaleTimeString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {log.guardDevice}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Content */}
+      <Suspense fallback={<StatsSkeleton />}>
+        <AuditDashboard />
+      </Suspense>
     </div>
   );
 }

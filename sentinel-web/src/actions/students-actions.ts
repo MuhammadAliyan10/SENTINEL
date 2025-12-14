@@ -27,6 +27,7 @@ export interface StudentSearchResult {
   section: string | null;
   department: string | null;
   semester: string | null;
+  profilePhotoUrl: string | null;
   createdAt: Date;
   createdBy: {
     id: string;
@@ -125,6 +126,7 @@ export async function searchStudents(query: string): Promise<{
             gateNumber: true,
           },
         },
+        profilePhotoUrl: true,
       },
     });
 

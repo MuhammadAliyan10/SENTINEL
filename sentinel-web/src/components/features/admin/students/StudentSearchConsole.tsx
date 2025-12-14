@@ -6,9 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, Loader2, ArrowRight } from "lucide-react";
-import { searchStudents, StudentSearchResult } from "@/actions/students-actions";
+import { Search, Loader2, ArrowRight, User, GraduationCap } from "lucide-react";
+import {
+  searchStudents,
+  StudentSearchResult,
+} from "@/actions/students-actions";
 import { useRouter, useSearchParams } from "next/navigation";
+
+import { cn } from "@/lib/utils";
 
 export function StudentSearchConsole() {
   const router = useRouter();
@@ -19,20 +24,6 @@ export function StudentSearchConsole() {
   const [results, setResults] = useState<StudentSearchResult[]>([]);
   const [isPending, startTransition] = useTransition();
   const [hasSearched, setHasSearched] = useState(false);
-
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (query.trim().length >= 3) {
-        performSearch(query);
-      } else if (query.trim().length === 0) {
-        setResults([]);
-        setHasSearched(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [query]);
 
   const performSearch = (term: string) => {
     startTransition(async () => {
@@ -46,86 +37,152 @@ export function StudentSearchConsole() {
     });
   };
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (query.trim().length >= 3) {
+        performSearch(query);
+      } else if (query.trim().length === 0) {
+        setResults([]);
+        setHasSearched(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
   const handleViewProfile = (id: string) => {
     router.push(`/admin/students/${id}`);
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col items-center justify-center space-y-4 py-8">
-        <div className="relative w-full max-w-2xl">
-          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+    <div className="space-y-8 max-w-5xl mx-auto">
+      {/* Search Hero Section */}
+      <div className="flex flex-col items-center justify-center space-y-6 py-12">
+        <div className="text-center space-y-2">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">
+            Student Directory
+          </h2>
+          <p className="text-muted-foreground text-lg">
+            Search for students by name or SAP ID to manage their profiles
+          </p>
+        </div>
+
+        <div className="relative w-full max-w-2xl shadow-lg rounded-xl transition-shadow hover:shadow-xl">
+          <div className="absolute inset-y-0 left-4 pl-4 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-muted-foreground" />
+          </div>
           <Input
-            className="h-12 pl-10 text-lg"
+            className="h-14 pl-12 pr-12 text-lg bg-white border-slate-200 focus:border-primary focus:ring-primary/20 rounded-xl"
             placeholder="Search by Name or SAP ID..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           {isPending && (
-            <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
+            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
           )}
         </div>
+
         {!hasSearched && (
-          <p className="text-sm text-muted-foreground">
-            Enter at least 3 characters to search
+          <p className="text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-2">
+            Type at least 3 characters to start searching
           </p>
         )}
       </div>
 
+      {/* Results Section */}
       {hasSearched && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">
-            Found {results.length} result{results.length !== 1 && "s"}
-          </h3>
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between border-b pb-4">
+            <h3 className="text-xl font-semibold text-foreground">
+              Search Results
+            </h3>
+            <Badge variant="secondary" className="px-3 py-1">
+              {results.length} found
+            </Badge>
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {results.map((student) => (
               <Card
                 key={student.id}
-                className="cursor-pointer hover:border-primary/50 transition-colors"
+                className="group cursor-pointer border-border hover:border-primary/50 transition-all duration-300 hover:shadow-md overflow-hidden"
                 onClick={() => handleViewProfile(student.id)}
               >
-                <CardContent className="p-4 flex items-center space-x-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={""} /> {/* Add photo URL if available */}
-                    <AvatarFallback>
-                      {student.fullName?.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {student.fullName}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {student.sapId}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge
-                        variant="secondary"
-                        className="text-[10px] px-1 py-0"
+                <CardContent className="p-0">
+                  <div className="p-5 flex items-start space-x-4">
+                    <Avatar className="h-14 w-14 border-2 border-white shadow-sm">
+                      <AvatarImage src={student.profilePhotoUrl || undefined} />
+                      <AvatarFallback
+                        className={cn(
+                          "text-lg font-medium",
+                          student.isPaid
+                            ? "bg-primary/10 text-primary"
+                            : "bg-slate-100 text-slate-500"
+                        )}
                       >
-                        {student.semester ? `Sem ${student.semester}` : "N/A"}
-                      </Badge>
-                      {student.isPaid ? (
-                        <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1 py-0 hover:bg-green-100">
-                          Paid
+                        {student.fullName?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+                          {student.fullName}
+                        </p>
+                      </div>
+                      <p className="text-sm text-muted-foreground font-mono bg-slate-50 inline-block px-1.5 rounded">
+                        {student.sapId}
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-2 py-0.5 h-5 gap-1"
+                        >
+                          <GraduationCap className="h-3 w-3" />
+                          {student.semester ? `Sem ${student.semester}` : "N/A"}
                         </Badge>
-                      ) : (
-                        <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px] px-1 py-0 hover:bg-red-100">
-                          Unpaid
-                        </Badge>
-                      )}
+                        {student.isPaid ? (
+                          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] px-2 py-0.5 h-5 hover:bg-emerald-100">
+                            Paid
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-2 py-0.5 h-5 hover:bg-amber-100">
+                            Unpaid
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  <div className="bg-slate-50/50 px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-muted-foreground group-hover:bg-primary/5 transition-colors">
+                    <span>View Profile</span>
+                    <ArrowRight className="h-3.5 w-3.5 transform group-hover:translate-x-1 transition-transform" />
+                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
 
           {results.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              No students found matching "{query}"
+            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+              <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center">
+                <User className="h-6 w-6 text-slate-400" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">No students found</p>
+                <p className="text-sm text-muted-foreground">
+                  We couldn&apos;t find any student matching &quot;{query}&quot;
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setQuery("")}
+                className="mt-2"
+              >
+                Clear Search
+              </Button>
             </div>
           )}
         </div>

@@ -14,53 +14,28 @@ import {
   Radio,
   Zap,
 } from "lucide-react";
-import type { EntryStatus, EntryLogDetailed } from "@/types/database";
+import { createClient } from "@/lib/supabase/client";
+import type { EntryStatus } from "@/types/database";
 
-// Mock data for demonstration - will be replaced with Supabase Realtime
-const generateMockEntry = (): EntryLogDetailed => {
-  const names = [
-    "Ahmed Khan",
-    "Sara Ali",
-    "Muhammad Zain",
-    "Fatimah Hassan",
-    "Ali Raza",
-    "Ayesha Malik",
-    "Hassan Ahmed",
-    "Zainab Qureshi",
-  ];
-  const statuses: EntryStatus[] = [
-    "allowed",
-    "allowed",
-    "allowed",
-    "allowed",
-    "rejected",
-    "re-entry",
-  ];
-  const locations = [
-    "Main Gate",
-    "Library Entrance",
-    "CS Building",
-    "Engineering Block",
-  ];
+// Define the shape of the Supabase response
+interface SupabaseLogRow {
+  id: string;
+  timestamp: string;
+  status: string;
+  gate_number: string | null;
+  user_id: string;
+  type: string;
+}
 
-  const name = names[Math.floor(Math.random() * names.length)];
-  const sapId = `7${Math.floor(Math.random() * 10000000)
-    .toString()
-    .padStart(7, "0")}`;
-
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    scanned_at: new Date().toISOString(),
-    status: statuses[Math.floor(Math.random() * statuses.length)],
-    guard_device_id: `GATE-${Math.floor(Math.random() * 3) + 1}`,
-    location: locations[Math.floor(Math.random() * locations.length)],
-    notes: null,
-    full_name: name,
-    sap_id: sapId,
-    photo_url: null,
-    payment_status: Math.random() > 0.2,
-  };
-};
+interface LiveEntry {
+  id: string;
+  scanned_at: string;
+  status: EntryStatus;
+  location: string;
+  full_name: string;
+  sap_id: string;
+  photo_url: string | null;
+}
 
 function getInitials(name: string): string {
   return name
@@ -94,35 +69,123 @@ function StatusBadge({ status }: { status: EntryStatus }) {
           Re-entry
         </Badge>
       );
+    default:
+      return <Badge variant="outline">{status}</Badge>;
   }
 }
 
 export function LiveDashboardClient() {
-  const [entries, setEntries] = useState<EntryLogDetailed[]>([]);
-  const [totalEntered, setTotalEntered] = useState(142);
+  const [entries, setEntries] = useState<LiveEntry[]>([]);
+  const [stats, setStats] = useState({
+    totalEntered: 0,
+    currentlyInside: 0,
+    rejected: 0,
+  });
   const [lastScanTime, setLastScanTime] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
 
-  // Simulate real-time entries (replace with Supabase Realtime in production)
   useEffect(() => {
-    // Add initial entries
-    const initial = Array.from({ length: 5 }, generateMockEntry);
-    setEntries(initial);
-    setLastScanTime(initial[0]?.scanned_at || null);
+    const supabase = createClient();
 
-    // Simulate new entries coming in
-    const interval = setInterval(() => {
-      const newEntry = generateMockEntry();
-      setEntries((prev) => [newEntry, ...prev].slice(0, 50)); // Keep last 50
-      setLastScanTime(newEntry.scanned_at);
-
-      if (newEntry.status === "allowed") {
-        setTotalEntered((prev) => prev + 1);
+    // Initial fetch to populate the list
+    const fetchInitial = async () => {
+      try {
+        const response = await fetch("/api/admin/live-scans");
+        if (response.ok) {
+          const data = await response.json();
+          // Transform API data to LiveEntry format
+          const initialEntries = data.scans.map((scan: any) => ({
+            id: scan.id,
+            scanned_at: scan.timestamp,
+            status: scan.status,
+            location: "Main Gate", // Default for now
+            full_name: scan.user.fullName || "Unknown",
+            sap_id: "---", // API might not return SAP ID in the list view, need to check
+            photo_url: scan.user.profilePhotoUrl,
+          }));
+          setEntries(initialEntries);
+          if (initialEntries.length > 0) {
+            setLastScanTime(initialEntries[0].scanned_at);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch initial scans:", error);
       }
-    }, 5000); // New entry every 5 seconds
+    };
 
-    return () => clearInterval(interval);
+    fetchInitial();
+
+    // Subscribe to access_logs table changes
+    const channel = supabase
+      .channel("access_logs_dashboard")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "access_logs",
+        },
+        async (payload) => {
+          const newRecord = payload.new as SupabaseLogRow;
+
+          // Fetch user details separately
+          const { data: userData } = await supabase
+            .from("users")
+            .select("sap_id, full_name, profile_photo_url")
+            .eq("id", newRecord.user_id)
+            .single();
+
+          if (userData) {
+            // Map DB status to UI EntryStatus
+            let uiStatus: EntryStatus = "allowed";
+            if (newRecord.status === "REJECTED") uiStatus = "rejected";
+            if (newRecord.status === "DUPLICATE") uiStatus = "re-entry";
+
+            const newEntry: LiveEntry = {
+              id: newRecord.id,
+              scanned_at: newRecord.timestamp,
+              status: uiStatus,
+              location: newRecord.gate_number || "Main Gate",
+              full_name: (userData as any).full_name || "Unknown",
+              sap_id: (userData as any).sap_id,
+              photo_url: (userData as any).profile_photo_url,
+            };
+
+            setEntries((prev) => [newEntry, ...prev].slice(0, 50));
+            setLastScanTime(newEntry.scanned_at);
+
+            // Update local stats optimistically
+            setStats((prev) => {
+              const isEntry = newRecord.type === "ENTRY";
+              const isExit = newRecord.type === "EXIT";
+              const isGranted = newRecord.status === "GRANTED";
+              const isRejected = newRecord.status === "REJECTED";
+
+              return {
+                totalEntered:
+                  isEntry && isGranted
+                    ? prev.totalEntered + 1
+                    : prev.totalEntered,
+                currentlyInside:
+                  isEntry && isGranted
+                    ? prev.currentlyInside + 1
+                    : isExit && isGranted
+                    ? prev.currentlyInside - 1
+                    : prev.currentlyInside,
+                rejected: isRejected ? prev.rejected + 1 : prev.rejected,
+              };
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        setIsConnected(status === "SUBSCRIBED");
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
@@ -157,7 +220,8 @@ export function LiveDashboardClient() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalEntered}</div>
+            <div className="text-2xl font-bold">{stats.totalEntered}</div>
+            <p className="text-xs text-muted-foreground mt-1">* Updates live</p>
           </CardContent>
         </Card>
 
@@ -170,7 +234,7 @@ export function LiveDashboardClient() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {Math.floor(totalEntered * 0.7)}
+              {stats.currentlyInside}
             </div>
           </CardContent>
         </Card>
@@ -184,7 +248,7 @@ export function LiveDashboardClient() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {entries.filter((e) => e.status === "rejected").length}
+              {stats.rejected}
             </div>
           </CardContent>
         </Card>
@@ -214,7 +278,7 @@ export function LiveDashboardClient() {
             <CardTitle>Live Entry Feed</CardTitle>
           </div>
           <Badge variant="outline" className="animate-pulse">
-            {entries.length} entries
+            {entries.length} recent entries
           </Badge>
         </CardHeader>
         <CardContent>
@@ -222,47 +286,53 @@ export function LiveDashboardClient() {
             ref={feedRef}
             className="space-y-3 max-h-[500px] overflow-y-auto"
           >
-            {entries.map((entry, index) => (
-              <div
-                key={entry.id}
-                className={`
-                  flex items-center justify-between p-4 rounded-lg border border-border
-                  transition-all duration-300
-                  ${
-                    index === 0
-                      ? "bg-primary/5 border-primary/20 animate-pulse"
-                      : "hover:bg-slate-50"
-                  }
-                `}
-              >
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={entry.photo_url || undefined} />
-                    <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                      {getInitials(entry.full_name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {entry.full_name}
-                    </p>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <code className="font-mono bg-slate-100 px-1 rounded">
-                        {entry.sap_id}
-                      </code>
-                      <span>•</span>
-                      <span>{entry.location}</span>
+            {entries.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p>Waiting for scans...</p>
+              </div>
+            ) : (
+              entries.map((entry, index) => (
+                <div
+                  key={entry.id}
+                  className={`
+                    flex items-center justify-between p-4 rounded-lg border border-border
+                    transition-all duration-300
+                    ${
+                      index === 0
+                        ? "bg-primary/5 border-primary/20 animate-pulse"
+                        : "hover:bg-slate-50"
+                    }
+                  `}
+                >
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={entry.photo_url || undefined} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                        {getInitials(entry.full_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {entry.full_name}
+                      </p>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <code className="font-mono bg-slate-100 px-1 rounded">
+                          {entry.sap_id}
+                        </code>
+                        <span>•</span>
+                        <span>{entry.location}</span>
+                      </div>
                     </div>
                   </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <StatusBadge status={entry.status} />
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(entry.scanned_at).toLocaleTimeString()}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <StatusBadge status={entry.status} />
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(entry.scanned_at).toLocaleTimeString()}
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

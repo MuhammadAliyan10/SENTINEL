@@ -28,6 +28,7 @@ export interface GuardStats {
   active: number;
   inactive: number;
   totalScans: number;
+  topPerformer: string | null;
 }
 
 export interface GuardActivity {
@@ -341,25 +342,51 @@ export async function getGuardStats(): Promise<GuardStats> {
   try {
     await getAdminId();
 
-    const [totalScans, activeCount, inactiveCount] = await prisma.$transaction([
-      prisma.accessLog.count({
-        where: {
-          scannerId: { not: null },
-        },
-      }),
-      prisma.user.count({
-        where: { role: "GUARD", isActive: true },
-      }),
-      prisma.user.count({
-        where: { role: "GUARD", isActive: false },
-      }),
-    ]);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [totalScans, activeCount, inactiveCount, topPerformerData] =
+      await Promise.all([
+        prisma.accessLog.count({
+          where: {
+            scannerId: { not: null },
+            timestamp: { gte: todayStart },
+          },
+        }),
+        prisma.user.count({
+          where: { role: "GUARD", isActive: true },
+        }),
+        prisma.user.count({
+          where: { role: "GUARD", isActive: false },
+        }),
+        // Get top performer
+        prisma.accessLog.groupBy({
+          by: ["scannerId"],
+          where: {
+            scannerId: { not: null },
+            timestamp: { gte: todayStart },
+          },
+          _count: { id: true },
+          orderBy: { _count: { id: "desc" } },
+          take: 1,
+        }),
+      ]);
+
+    let topPerformer: string | null = null;
+    if (topPerformerData.length > 0 && topPerformerData[0].scannerId) {
+      const guard = await prisma.user.findUnique({
+        where: { id: topPerformerData[0].scannerId },
+        select: { fullName: true },
+      });
+      topPerformer = guard?.fullName || null;
+    }
 
     return {
       total: activeCount + inactiveCount,
       active: activeCount,
       inactive: inactiveCount,
       totalScans,
+      topPerformer,
     };
   } catch (error) {
     console.error("Get Guard Stats Error:", error);
@@ -368,6 +395,7 @@ export async function getGuardStats(): Promise<GuardStats> {
       active: 0,
       inactive: 0,
       totalScans: 0,
+      topPerformer: null,
     };
   }
 }

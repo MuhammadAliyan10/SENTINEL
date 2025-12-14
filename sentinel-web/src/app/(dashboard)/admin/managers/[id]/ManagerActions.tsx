@@ -7,7 +7,7 @@ import {
   deleteManager,
   type ManagerDetail,
 } from "@/actions/managers-actions";
-import { EditManagerDialog } from "@/components/features/admin/EditManagerDialog";
+import { EditManagerDialog } from "@/components/features/admin/managers/EditManagerDialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

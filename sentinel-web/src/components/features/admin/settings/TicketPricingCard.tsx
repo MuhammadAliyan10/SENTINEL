@@ -83,8 +83,8 @@ export function TicketPricingCard() {
             />
           </div>
           <p className="text-xs text-slate-500">
-            Default is Rs. 2000. Changing this will update the "Cash Liability"
-            for all managers immediately.
+            Default is Rs. 2000. Changing this will update the &quot;Cash
+            Liability&quot; for all managers immediately.
           </p>
         </div>
         <Button onClick={handleSave} disabled={isPending}>

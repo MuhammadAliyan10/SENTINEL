@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ManagersTableClient } from "./ManagersTableClient";
-import { CreateManagerDialog } from "@/components/features/admin/CreateManagerDialog";
+import { CreateManagerDialog } from "@/components/features/admin/managers/CreateManagerDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { UserCog, DollarSign, Users } from "lucide-react";

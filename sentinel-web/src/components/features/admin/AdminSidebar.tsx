@@ -8,10 +8,14 @@ import {
   Settings,
   LogOut,
   ChevronUp,
-  Upload,
   UserCog,
-  FileSearch,
+  FileText,
   Shield,
+  ScrollText,
+  ShieldCheck,
+  GraduationCap,
+  Settings2,
+  Activity,
 } from "lucide-react";
 import {
   Sidebar,
@@ -55,6 +59,11 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
+    title: "Guards",
+    href: "/admin/guards",
+    icon: Shield,
+  },
+  {
     title: "Managers",
     href: "/admin/managers",
     icon: UserCog,
@@ -65,14 +74,14 @@ const navItems = [
     icon: Users,
   },
   {
-    title: "Guards",
-    href: "/admin/guards",
-    icon: Shield,
+    title: "System Logs",
+    href: "/admin/logs",
+    icon: ScrollText,
   },
   {
-    title: "Audit Logs",
+    title: "Audit Ledger",
     href: "/admin/audit",
-    icon: FileSearch,
+    icon: FileText,
   },
   {
     title: "Settings",
@@ -87,7 +96,6 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    // Force full reload to clear all cached state
     window.location.href = "/admin/login";
   };
 
@@ -102,103 +110,247 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
   };
 
   return (
-    <Sidebar collapsible="icon">
-      {/* Header with Logo and Toggle */}
-      <SidebarHeader className="border-b border-sidebar-border p-4">
+    <Sidebar collapsible="icon" className="border-r border-border bg-card">
+      {/* Header with Logo */}
+      <SidebarHeader className="h-16 flex items-center justify-center border-b border-border/50 px-4">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="sm" asChild>
-              <Link href="/admin">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden bg-white">
-                  <img
-                    src="/UniversityLogo.jpeg"
-                    alt="Logo"
-                    className="size-7 object-contain"
-                  />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate font-semibold">Sentinel</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    Super Admin
-                  </span>
-                </div>
-              </Link>
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-transparent"
+            >
+              <div className="flex aspect-square size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <img
+                  src="/Logo.png"
+                  alt="Sentinel"
+                  className="size-8 object-contain"
+                />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                <span className="truncate font-bold text-lg tracking-tight text-foreground">
+                  Sentinel
+                </span>
+                <span className="truncate text-xs font-medium text-muted-foreground">
+                  Admin Console
+                </span>
+              </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
       {/* Navigation */}
-      <SidebarContent>
+      <SidebarContent className="px-2 py-4 gap-4">
+        {/* Group 1: Overview */}
         <SidebarGroup>
-          <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider px-2 mb-2 group-data-[collapsible=icon]:hidden">
+            Overview
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/admin" && pathname.startsWith(item.href));
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === "/admin"}
+                  tooltip="Dashboard"
+                >
+                  <Link
+                    href="/admin"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  >
+                    <LayoutDashboard className="size-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      Dashboard
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/admin/live")}
+                  tooltip="Live Monitor"
+                >
+                  <Link
+                    href="/admin/live"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  >
+                    <Activity className="size-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      Live Monitor
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      tooltip={item.title}
-                    >
-                      <Link href={item.href}>
-                        <item.icon className="size-5" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
+        {/* Group 2: Management */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider px-2 mb-2 group-data-[collapsible=icon]:hidden">
+            Management
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/admin/guards")}
+                  tooltip="Guards"
+                >
+                  <Link
+                    href="/admin/guards"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  >
+                    <ShieldCheck className="size-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      Guards
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/admin/managers")}
+                  tooltip="Managers"
+                >
+                  <Link
+                    href="/admin/managers"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  >
+                    <UserCog className="size-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      Managers
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/admin/students")}
+                  tooltip="Students"
+                >
+                  <Link
+                    href="/admin/students"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  >
+                    <GraduationCap className="size-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      Students
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Group 3: System */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground/70 uppercase tracking-wider px-2 mb-2 group-data-[collapsible=icon]:hidden">
+            System
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/admin/logs")}
+                  tooltip="System Logs"
+                >
+                  <Link
+                    href="/admin/logs"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  >
+                    <ScrollText className="size-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      System Logs
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/admin/audit")}
+                  tooltip="Audit Ledger"
+                >
+                  <Link
+                    href="/admin/audit"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  >
+                    <FileText className="size-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      Audit Ledger
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/admin/settings")}
+                  tooltip="Settings"
+                >
+                  <Link
+                    href="/admin/settings"
+                    className="group-data-[collapsible=icon]:justify-center"
+                  >
+                    <Settings2 className="size-5" />
+                    <span className="group-data-[collapsible=icon]:hidden">
+                      Settings
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
       {/* Footer with User Menu */}
-      <SidebarFooter>
+      <SidebarFooter className="p-4 border-t border-border/50">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-sidebar-accent/50 transition-colors"
                 >
-                  <Avatar className="h-8 w-8 rounded-lg">
+                  <Avatar className="h-9 w-9 rounded-lg border border-border">
                     <AvatarImage src="/avatars/admin.png" alt="Admin" />
-                    <AvatarFallback className="rounded-lg bg-primary text-primary-foreground">
+                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold">
                       {getInitials(user.fullName)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                    <span className="truncate font-semibold">
+                    <span className="truncate font-semibold text-foreground">
                       {user.fullName || "Super Admin"}
                     </span>
                     <span className="truncate text-xs text-muted-foreground">
                       {user.role}
                     </span>
                   </div>
-                  <ChevronUp className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
+                  <ChevronUp className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg border-border shadow-lg"
                 side="bottom"
                 align="end"
                 sideOffset={4}
               >
-                <DropdownMenuItem>
-                  <Settings className="mr-2 size-4" />
+                <DropdownMenuItem className="cursor-pointer">
+                  <Settings2 className="mr-2 size-4" />
                   Profile Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive cursor-pointer"
+                  className="text-destructive focus:text-destructive cursor-pointer bg-destructive/5 focus:bg-destructive/10"
                   onClick={handleSignOut}
                 >
                   <LogOut className="mr-2 size-4" />

@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import NextTopLoader from "nextjs-toploader";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -54,7 +55,7 @@ export default function RootLayout({
           speed={200}
           shadow="0 0 10px #4f39f6,0 0 5px #4f39f6"
         />
-        {children}
+        <QueryProvider>{children}</QueryProvider>
         <Toaster position="top-right" theme="light" richColors closeButton />
       </body>
     </html>

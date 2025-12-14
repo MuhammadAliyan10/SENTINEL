@@ -1,17 +1,20 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrafficDataPoint } from "@/actions/dashboard-actions";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
+import { Activity } from "lucide-react";
+
+interface TrafficDataPoint {
+  hour: string;
+  entries: number;
+}
 
 interface TrafficChartProps {
   data: TrafficDataPoint[];
@@ -19,72 +22,70 @@ interface TrafficChartProps {
 
 export function TrafficChart({ data }: TrafficChartProps) {
   return (
-    <Card className="col-span-1">
-      <CardHeader>
-        <CardTitle>Entry Traffic Over Time</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={data}
-              margin={{
-                top: 5,
-                right: 10,
-                left: 10,
-                bottom: 0,
-              }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="#e5e7eb"
-              />
-              <XAxis
-                dataKey="hour"
-                stroke="#888888"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                stroke="#888888"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => `${value}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#fff",
-                  borderRadius: "8px",
-                  border: "1px solid #e5e7eb",
-                }}
-                itemStyle={{ fontSize: "12px" }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="entries"
-                stroke="#2563eb"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-                name="Entries"
-              />
-              <Line
-                type="monotone"
-                dataKey="exits"
-                stroke="#ef4444"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-                name="Exits"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">
+            Entries Per Hour
+          </h3>
+          <p className="text-sm text-slate-500">Real-time gate traffic flow</p>
         </div>
-      </CardContent>
-    </Card>
+        <div className="p-2 bg-slate-50 rounded-lg">
+          <Activity className="h-5 w-5 text-[#4F39F6]" />
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="h-[300px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={data}
+            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+          >
+            <defs>
+              <linearGradient id="colorEntries" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#4F39F6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#4F39F6" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#E2E8F0"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="hour"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: "#64748B", fontSize: 12 }}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: "#64748B", fontSize: 12 }}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "white",
+                border: "1px solid #E2E8F0",
+                borderRadius: "8px",
+                boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+              }}
+              labelStyle={{ color: "#0F172A", fontWeight: 600 }}
+              itemStyle={{ color: "#4F39F6" }}
+            />
+            <Area
+              type="monotone"
+              dataKey="entries"
+              stroke="#4F39F6"
+              strokeWidth={2}
+              fillOpacity={1}
+              fill="url(#colorEntries)"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }

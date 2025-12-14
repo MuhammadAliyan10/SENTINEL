@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { getStudentProfile } from "@/actions/students-actions";
-import { StudentProfile } from "@/components/features/admin/StudentProfile";
+import { StudentProfile } from "@/components/features/admin/students/StudentProfile";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 

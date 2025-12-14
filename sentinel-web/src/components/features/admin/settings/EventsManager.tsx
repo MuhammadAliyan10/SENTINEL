@@ -160,8 +160,8 @@ export function EventsManager({ initialEvents }: EventsManagerProps) {
             Events Management
           </CardTitle>
           <CardDescription>
-            Create and manage events. The "Default" event is used for current
-            operations.
+            Create and manage events. The &quot;Default&quot; event is used for
+            current operations.
           </CardDescription>
         </div>
         <Button onClick={() => handleOpenDialog()}>

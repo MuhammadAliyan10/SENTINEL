@@ -531,6 +531,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                         hour: "2-digit",
                         minute: "2-digit",
                         hour12: true,
+                        timeZone: "Asia/Karachi",
                       })}
                     </p>
                   </div>

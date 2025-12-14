@@ -77,7 +77,7 @@ export function IssuePassForm() {
       } else {
         toast.error(res.message);
       }
-    } catch (error) {
+    } catch {
       toast.error("An unexpected error occurred");
     }
   };
@@ -130,7 +130,7 @@ _Please keep this token secure._`;
           <DrawerHeader>
             <DrawerTitle>Issue New Pass</DrawerTitle>
             <DrawerDescription>
-              Enter the student's SAP ID to generate an activation token.
+              Enter the student&apos;s SAP ID to generate an activation token.
             </DrawerDescription>
           </DrawerHeader>
 

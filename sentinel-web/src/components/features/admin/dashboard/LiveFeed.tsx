@@ -1,115 +1,153 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, ShieldCheck, ShieldAlert, User } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import { Radio, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
-interface LogEntry {
+interface LiveScan {
   id: string;
-  timestamp: string;
+  timestamp: Date | string;
   status: "GRANTED" | "REJECTED" | "DUPLICATE";
-  gate_number: string | null;
-  user_id: string;
+  user: {
+    fullName: string | null;
+    profilePhotoUrl: string | null;
+  };
 }
 
-export function LiveFeed() {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+interface LiveFeedProps {
+  initialData: LiveScan[];
+}
 
-  // PERFORMANCE FIX: Memoize Supabase client to prevent recreation on every render
-  const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
-    []
-  );
+export function LiveFeed({ initialData }: LiveFeedProps) {
+  const [scans, setScans] = useState<LiveScan[]>(initialData);
+  const [isPolling, setIsPolling] = useState(true);
 
+  // Poll every 5 seconds
   useEffect(() => {
-    const channel = supabase
-      .channel("access_logs_feed")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "access_logs",
-          filter: "status=in.(GRANTED,REJECTED,DUPLICATE)",
-        },
-        (payload) => {
-          const newLog = payload.new as LogEntry;
-          setLogs((prev) => [newLog, ...prev].slice(0, 10)); // Keep last 10
-        }
-      )
-      .subscribe();
+    if (!isPolling) return;
 
-    return () => {
-      supabase.removeChannel(channel);
+    const fetchLatest = async () => {
+      try {
+        const response = await fetch("/api/admin/live-scans");
+        if (response.ok) {
+          const data = await response.json();
+          setScans(data.scans);
+        }
+      } catch (error) {
+        console.error("Failed to fetch live scans:", error);
+      }
     };
-  }, [supabase]);
+
+    const interval = setInterval(fetchLatest, 5000);
+    return () => clearInterval(interval);
+  }, [isPolling]);
+
+  const getStatusConfig = (status: LiveScan["status"]) => {
+    switch (status) {
+      case "GRANTED":
+        return {
+          bg: "bg-white",
+          text: "text-emerald-600",
+          label: "Entered",
+        };
+      case "REJECTED":
+        return {
+          bg: "bg-red-50",
+          text: "text-red-600",
+          label: "DENIED",
+        };
+      case "DUPLICATE":
+        return {
+          bg: "bg-amber-50",
+          text: "text-amber-600",
+          label: "DOUBLE SCAN",
+        };
+    }
+  };
 
   return (
-    <Card className="h-[400px] flex flex-col">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Activity className="h-5 w-5 text-blue-500 animate-pulse" />
-          Live Activity Feed
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 p-0">
-        <ScrollArea className="h-[320px] px-4">
-          <div className="space-y-4 pb-4">
-            {logs.length === 0 && (
-              <div className="text-center text-muted-foreground py-8 text-sm">
-                Waiting for live activity...
-              </div>
-            )}
-            {logs.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100 animate-in slide-in-from-top-2 fade-in duration-300"
-              >
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Radio className="h-5 w-5 text-[#4F39F6]" />
+            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-[#4F39F6] rounded-full animate-pulse" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900">
+            Live Gate Activity
+          </h3>
+        </div>
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/admin/logs" className="text-[#4F39F6]">
+            <Eye className="h-4 w-4 mr-1" />
+            View All
+          </Link>
+        </Button>
+      </div>
+
+      {/* Feed List */}
+      <div className="flex-1 overflow-y-auto">
+        {scans.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-slate-400">
+            <p>No recent activity</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {scans.slice(0, 5).map((scan) => {
+              const config = getStatusConfig(scan.status);
+              return (
                 <div
+                  key={scan.id}
                   className={cn(
-                    "p-2 rounded-full shrink-0",
-                    log.status === "GRANTED"
-                      ? "bg-green-100 text-green-600"
-                      : log.status === "REJECTED"
-                      ? "bg-red-100 text-red-600"
-                      : "bg-blue-100 text-blue-600"
+                    "flex items-center gap-3 p-4 transition-colors",
+                    config.bg
                   )}
                 >
-                  {log.status === "GRANTED" ? (
-                    <ShieldCheck className="h-4 w-4" />
-                  ) : log.status === "REJECTED" ? (
-                    <ShieldAlert className="h-4 w-4" />
-                  ) : (
-                    <User className="h-4 w-4" />
-                  )}
-                </div>
-                <div className="flex-1 space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    {log.status === "GRANTED"
-                      ? "Access Granted"
-                      : log.status === "REJECTED"
-                      ? "Access Denied"
-                      : "Duplicate Scan"}
-                  </p>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{log.gate_number || "Main Gate"}</span>
-                    <span className="font-mono">
-                      {new Date(log.timestamp).toLocaleTimeString()}
-                    </span>
+                  {/* Avatar */}
+                  <div className="relative h-10 w-10 rounded-full overflow-hidden bg-slate-100 flex-shrink-0">
+                    {scan.user.profilePhotoUrl ? (
+                      <Image
+                        src={scan.user.profilePhotoUrl}
+                        alt=""
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-slate-400 font-medium">
+                        {scan.user.fullName?.charAt(0) || "?"}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">
+                      {scan.user.fullName || "Unknown"}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {new Date(scan.timestamp).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                        timeZone: "Asia/Karachi",
+                      })}
+                    </p>
+                  </div>
+
+                  {/* Status */}
+                  <span className={cn("text-xs font-semibold", config.text)}>
+                    {config.label}
+                  </span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+        )}
+      </div>
+    </div>
   );
 }

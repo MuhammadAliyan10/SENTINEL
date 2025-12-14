@@ -93,6 +93,7 @@ export interface EventData {
   startTime: Date | null;
   endTime: Date | null;
   ticketPrice: number;
+  maxCapacity: number | null;
   status: string;
   isDefault: boolean;
   primaryColor: string | null;
@@ -276,5 +277,90 @@ export async function updateEventStatus(
   } catch (error) {
     console.error("Failed to update event status:", error);
     return { success: false, error: "Failed to update status" };
+  }
+}
+
+// ============================================
+// SYSTEM SETTINGS
+// ============================================
+
+export async function updateSystemSetting(
+  key: string,
+  value: boolean
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    await requireSuperAdmin();
+
+    await prisma.systemSettings.upsert({
+      where: { key },
+      update: { value: value.toString() },
+      create: { key, value: value.toString() },
+    });
+
+    revalidatePath("/admin/settings");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update system setting:", error);
+    return { success: false, message: "Failed to update setting" };
+  }
+}
+
+export async function getSystemSettings(): Promise<{
+  allowStudentLogin: boolean;
+  enableRegistrations: boolean;
+  strictGateMode: boolean;
+}> {
+  try {
+    const settings = await prisma.systemSettings.findMany({
+      where: {
+        key: {
+          in: ["allowStudentLogin", "enableRegistrations", "strictGateMode"],
+        },
+      },
+    });
+
+    const settingsMap = Object.fromEntries(
+      settings.map((s) => [s.key, s.value === "true"])
+    );
+
+    return {
+      allowStudentLogin: settingsMap.allowStudentLogin ?? true,
+      enableRegistrations: settingsMap.enableRegistrations ?? true,
+      strictGateMode: settingsMap.strictGateMode ?? false,
+    };
+  } catch (error) {
+    console.error("Failed to get system settings:", error);
+    return {
+      allowStudentLogin: true,
+      enableRegistrations: true,
+      strictGateMode: false,
+    };
+  }
+}
+
+// ============================================
+// DANGER ZONE
+// ============================================
+
+export async function purgeTestData(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  try {
+    await requireSuperAdmin();
+
+    const result = await prisma.accessLog.deleteMany({});
+
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin");
+    revalidatePath("/admin/logs");
+
+    return {
+      success: true,
+      message: `Purged ${result.count} access logs successfully`,
+    };
+  } catch (error) {
+    console.error("Failed to purge test data:", error);
+    return { success: false, message: "Failed to purge data" };
   }
 }

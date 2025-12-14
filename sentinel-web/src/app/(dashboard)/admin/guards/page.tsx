@@ -1,17 +1,17 @@
 import { Suspense } from "react";
 import { requireSuperAdmin } from "@/actions/auth-actions";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LayoutDashboard, Activity } from "lucide-react";
 import {
   getAllGuards,
   getGuardStats,
   getGuardActivity,
 } from "@/actions/guard-actions";
-import GuardsClient from "@/components/features/admin/GuardsClient";
+import GuardsClient from "@/components/features/admin/guards/GuardsClient";
 import { GuardStatsView } from "@/components/features/admin/guards/GuardStatsView";
 import { GuardActivityLog } from "@/components/features/admin/guards/GuardActivityLog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LayoutDashboard, Activity } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -23,14 +23,20 @@ async function GuardsOverview() {
   const [guards, stats] = await Promise.all([getAllGuards(), getGuardStats()]);
 
   return (
-    <>
+    <div className="space-y-6">
       <GuardStatsView stats={stats} />
       <Card className="bg-white border-border shadow-sm">
-        <CardContent className="pt-6">
+        <CardHeader>
+          <CardTitle>Security Guards</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage access and view performance
+          </p>
+        </CardHeader>
+        <CardContent>
           <GuardsClient initialGuards={guards} />
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }
 
@@ -45,18 +51,14 @@ async function ActivityTab() {
 
 function GuardsSkeleton() {
   return (
-    <>
+    <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
         {[...Array(3)].map((_, i) => (
-          <Card key={i} className="bg-white border-border shadow-sm">
-            <Skeleton className="h-32 w-full" />
-          </Card>
+          <Skeleton key={i} className="h-32 rounded-xl" />
         ))}
       </div>
-      <Card className="bg-white border-border shadow-sm">
-        <Skeleton className="h-96 w-full" />
-      </Card>
-    </>
+      <Skeleton className="h-96 rounded-xl" />
+    </div>
   );
 }
 
@@ -71,9 +73,9 @@ export default async function GuardsPage() {
     <div className="space-y-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Guard Management</h1>
+        <h1 className="text-3xl font-bold text-foreground">Security Force</h1>
         <p className="text-muted-foreground mt-1">
-          Security guard accounts and activity monitoring
+          Guard accounts and real-time performance monitoring
         </p>
       </div>
 
@@ -98,13 +100,13 @@ export default async function GuardsPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
+        <TabsContent value="overview">
           <Suspense fallback={<GuardsSkeleton />}>
             <GuardsOverview />
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="activity" className="space-y-6">
+        <TabsContent value="activity">
           <Suspense fallback={<GuardsSkeleton />}>
             <ActivityTab />
           </Suspense>

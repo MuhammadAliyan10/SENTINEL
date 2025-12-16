@@ -13,8 +13,9 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // SECURITY FIX: Only allow STUDENT role to access this endpoint
     const profile = await prisma.user.findUnique({
-      where: { id: user.id },
+      where: { id: user.id, role: "STUDENT" },
       select: {
         id: true,
         sapId: true,

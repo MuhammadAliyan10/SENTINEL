@@ -69,10 +69,10 @@ export function verifyQrSignature(payload: QrPayload, secret: string): boolean {
       return false;
     }
 
-    // 6. Timestamp Check (10 Minutes = 600,000ms)
+    // 6. Timestamp Check (5 Minutes = 300,000ms) - matches web server
     const now = Date.now();
     const diff = Math.abs(now - payload.ts);
-    const ALLOWED_WINDOW = 10 * 60 * 1000; // 10 minutes
+    const ALLOWED_WINDOW = 5 * 60 * 1000; // 5 minutes (same as web)
 
     if (diff > ALLOWED_WINDOW) {
       if (__DEV__) {

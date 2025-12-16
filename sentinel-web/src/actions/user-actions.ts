@@ -257,29 +257,32 @@ export async function deleteUser(
       return { success: false, message: "Cannot delete SUPER_ADMIN accounts" };
     }
 
-    // Delete from Prisma first
-    await prisma.user.delete({
-      where: { id: userId },
-    });
-
-    // Delete from Supabase Auth
+    // HIGH-1 FIX: Delete Auth FIRST to prevent orphans
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
       userId
     );
 
     if (authError) {
       console.error("Supabase Auth Delete Error:", authError);
-      // User is already deleted from Prisma, log the issue
+      return {
+        success: false,
+        message: "Failed to delete authentication record. Please try again.",
+      };
     }
 
-    // Log the action (use saved userId since user record is deleted)
+    // Log the action BEFORE deleting from Prisma
     await prisma.auditLog.create({
       data: {
         action: "USER_DELETED",
         performerId: admin.id,
-        targetId: userId, // Keep the original ID for audit trail
+        targetId: userId,
         details: `Deleted ${user.role}: ${user.fullName} (${user.sapId})`,
       },
+    });
+
+    // Delete from Prisma
+    await prisma.user.delete({
+      where: { id: userId },
     });
 
     revalidatePath("/admin/students");

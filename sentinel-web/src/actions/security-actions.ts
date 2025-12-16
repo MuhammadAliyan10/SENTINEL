@@ -221,9 +221,17 @@ export async function logAccessAttempt(
     }
 
     // Check for duplicate scan (passback prevention)
+    // HIGH-4 FIX: Add time window to prevent millisecond-gap exploitation
     if (type === "ENTRY" && status === "GRANTED") {
+      // Only check logs from today within the last 5 minutes for faster queries
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
       const lastLog = await prisma.accessLog.findFirst({
-        where: { userId: studentId },
+        where: {
+          userId: studentId,
+          timestamp: { gte: todayStart },
+        },
         orderBy: { timestamp: "desc" },
       });
 

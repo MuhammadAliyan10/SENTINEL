@@ -71,6 +71,7 @@ model User {
   role            UserRole @default(STUDENT)
   activationToken String?  @unique @map("activation_token") // The 6-char secret for Student Login (Indexed)
   passwordHash    String?  @map("password_hash") // For Admins/CRs only
+  qrSecret        String?  @map("qr_secret") // TOTP secret for offline QR codes (Base32)
 
   // SECURITY: Track failed login attempts for rate limiting
   failedLoginAttempts Int      @default(0) @map("failed_login_attempts")

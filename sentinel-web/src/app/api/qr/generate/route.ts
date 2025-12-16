@@ -62,9 +62,10 @@ export async function GET() {
     }
 
     // 3. Fetch student data directly from Supabase (Edge-compatible)
+    // SECURITY FIX: Use correct table name matching Prisma schema mapping
     const { data: student, error } = await supabase
-      .from("User")
-      .select("sapId, activationToken, isActive, isPaid, role")
+      .from("users")
+      .select("sap_id, activation_token, is_active, is_paid, role")
       .eq("id", user.id)
       .single();
 
@@ -79,21 +80,21 @@ export async function GET() {
       );
     }
 
-    if (!student.isActive) {
+    if (!student.is_active) {
       return Response.json(
         { error: "Your access has been revoked" },
         { status: 403 }
       );
     }
 
-    if (!student.isPaid) {
+    if (!student.is_paid) {
       return Response.json(
         { error: "Payment required for access" },
         { status: 403 }
       );
     }
 
-    if (!student.activationToken) {
+    if (!student.activation_token) {
       return Response.json(
         { error: "No activation token found" },
         { status: 400 }
@@ -102,11 +103,11 @@ export async function GET() {
 
     // 4. Generate timestamp and signature using Web Crypto API
     const timestamp = Date.now();
-    const payloadString = `${student.sapId}:${timestamp}`;
+    const payloadString = `${student.sap_id}:${timestamp}`;
 
     // HMAC-SHA256 using Web Crypto API (Edge-compatible)
     const encoder = new TextEncoder();
-    const keyData = encoder.encode(student.activationToken);
+    const keyData = encoder.encode(student.activation_token);
     const msgData = encoder.encode(payloadString);
 
     const cryptoKey = await crypto.subtle.importKey(
@@ -128,7 +129,7 @@ export async function GET() {
 
     // 5. Create QR payload (JSON format for scanner to parse)
     const qrPayload = JSON.stringify({
-      sap: student.sapId,
+      sap: student.sap_id,
       ts: timestamp,
       sig: signature,
     });

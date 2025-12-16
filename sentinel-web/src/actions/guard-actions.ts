@@ -236,7 +236,21 @@ export async function deleteGuard(guardId: string): Promise<CreateGuardResult> {
 
     const supabaseAdmin = createAdminClient();
 
-    // Log the action BEFORE deleting
+    // HIGH-1 FIX: Delete Auth FIRST to prevent orphans
+    // If Auth delete fails, abort. If Prisma delete fails, Auth is already gone (acceptable).
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
+      guardId
+    );
+
+    if (authError) {
+      console.error("Failed to delete from Supabase Auth:", authError);
+      return {
+        success: false,
+        message: "Failed to delete authentication record. Please try again.",
+      };
+    }
+
+    // Log the action BEFORE deleting from Prisma
     await prisma.auditLog.create({
       data: {
         performerId: adminId,
@@ -260,15 +274,6 @@ export async function deleteGuard(guardId: string): Promise<CreateGuardResult> {
     await prisma.user.delete({
       where: { id: guardId },
     });
-
-    // Delete from Supabase Auth
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
-      guardId
-    );
-
-    if (authError) {
-      console.error("Failed to delete from Supabase Auth:", authError);
-    }
 
     revalidatePath("/admin/guards");
 

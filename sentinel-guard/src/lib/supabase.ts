@@ -212,10 +212,12 @@ export const getUserBySapId = async (sapId: string): Promise<UserData> => {
     console.log(`[DB] Authenticated as: ${session.email}`);
   }
 
-  // 2. Query database
+  // 2. Query database with explicit fields (avoid overfetching)
   const { data, error } = await supabase
     .from("users")
-    .select("*")
+    .select(
+      "id, sap_id, full_name, semester, section, is_paid, is_active, activation_token, profile_photo_url"
+    )
     .eq("sap_id", sapId)
     .single();
 
@@ -267,7 +269,7 @@ export const getRecentAccessLog = async (
 
   const { data, error } = await supabase
     .from("access_logs")
-    .select("*")
+    .select("id, user_id, type, status, timestamp")
     .eq("user_id", userId)
     .gte("timestamp", twentyFourHoursAgo)
     .order("timestamp", { ascending: false })

@@ -134,48 +134,43 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
   }, []);
 
   const refreshQrPayload = useCallback(async () => {
+    // CONCURRENCY FIX: Prevent refresh storms
     if (isRefreshing || isOffline) return;
+
     setIsRefreshing(true);
     try {
       const response = await fetch("/api/qr/generate", {
-        method: "POST",
+        method: "GET",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
       });
       if (response.ok) {
         const data = await response.json();
         setQrPayload(data.payload);
       }
     } catch {
-      // Silent
+      // Silent - offline mode will display cached QR
     } finally {
       setIsRefreshing(false);
     }
-  }, [user.id, isRefreshing, isOffline]);
+  }, [isRefreshing, isOffline]);
 
   const checkInitialAccessState = useCallback(async () => {
     try {
-      // Check for any ENTRY logs to see if student has entered before
-      const { data: entryExists } = await supabase
-        .from("access_logs")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("type", "ENTRY")
-        .limit(1);
-
-      const hasEntered = entryExists && entryExists.length > 0;
-      if (hasEntered) {
-        setHasEnteredBefore(true);
-      }
-
-      // Get the most recent log to determine current state
+      // PERFORMANCE FIX: Single query instead of 2 (saves 800 queries at peak)
+      // Get the most recent log - if it exists, student has entered before
       const { data, error } = await supabase
         .from("access_logs")
         .select("type, timestamp")
         .eq("user_id", user.id)
         .order("timestamp", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
+
+      // If any log exists, student has entered before
+      const hasEntered = !!data;
+      if (hasEntered) {
+        setHasEnteredBefore(true);
+      }
 
       if (data && !error) {
         const logData = data as { type: string; timestamp: string };
@@ -252,7 +247,9 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
   }, []);
 
   useEffect(() => {
-    qrIntervalRef.current = setInterval(refreshQrPayload, 15000);
+    // PERFORMANCE FIX: Refresh every 60s instead of 15s (QR valid for 5 min)
+    // Reduces server load by 4x at 800 users
+    qrIntervalRef.current = setInterval(refreshQrPayload, 60000);
     checkInitialAccessState();
     const unsubscribeRealtime = setupRealtimeSubscription();
     const unsubscribeConnectivity = setupConnectivityMonitor();

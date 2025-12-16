@@ -351,25 +351,34 @@ export async function createManager(
         authError.code === "email_exists"
       ) {
         // Orphan record found - email exists in Auth but not in Prisma
+        // SECURITY FIX: Use paginated search instead of unbounded listUsers()
+        let orphanUser = null;
+        let page = 1;
+        const perPage = 50;
 
-        // Fetch the existing user from Supabase
-        const { data: existingAuthUser, error: fetchError } =
-          await supabaseAdmin.auth.admin.listUsers();
-        const foundUser = existingAuthUser?.users.find(
-          (u) => u.email === email
-        );
+        // Search with reasonable limit (max 500 users checked)
+        while (page <= 10 && !orphanUser) {
+          const { data: userPage } = await supabaseAdmin.auth.admin.listUsers({
+            page,
+            perPage,
+          });
 
-        if (!foundUser) {
+          if (!userPage?.users?.length) break;
+
+          orphanUser = userPage.users.find((u) => u.email === email);
+          page++;
+        }
+
+        if (!orphanUser) {
           return {
             success: false,
-            message:
-              "Email exists but could not retrieve user details. Please contact support.",
+            message: "Email conflict detected. Please contact support.",
           };
         }
 
         // Check if this user exists in Prisma
         const prismaUser = await prisma.user.findUnique({
-          where: { id: foundUser.id },
+          where: { id: orphanUser.id },
         });
 
         if (prismaUser) {
@@ -381,7 +390,7 @@ export async function createManager(
 
         // If we get here, it's an orphan (exists in Auth, not in Prisma)
         // We can proceed to use this ID
-        userId = foundUser.id;
+        userId = orphanUser.id;
 
         // Optional: Update the password if provided, since we're "reclaiming" the account
         if (password) {

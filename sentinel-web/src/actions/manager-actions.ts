@@ -502,10 +502,21 @@ export async function deleteStudent(
       };
     }
 
-    // Delete from Supabase Auth
+    // HIGH-1 FIX: Delete Auth FIRST to prevent orphans
     const supabaseAdmin = createAdminClient();
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
+      studentId
+    );
 
-    // Log the action BEFORE deleting (so we have record of who deleted)
+    if (authError) {
+      console.error("Failed to delete from Supabase Auth:", authError);
+      return {
+        success: false,
+        message: "Failed to delete authentication record. Please try again.",
+      };
+    }
+
+    // Log the action BEFORE deleting Prisma records
     await prisma.auditLog.create({
       data: {
         performerId: managerId,
@@ -532,16 +543,6 @@ export async function deleteStudent(
     await prisma.user.delete({
       where: { id: studentId },
     });
-
-    // 4. Delete from Supabase Auth
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
-      studentId
-    );
-
-    if (authError) {
-      console.error("Failed to delete from Supabase Auth:", authError);
-      // Don't return error since Prisma deletion succeeded
-    }
 
     revalidatePath("/manager/dashboard");
 

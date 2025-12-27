@@ -14,7 +14,12 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import { supabase } from "../src/lib/supabase";
+import {
+  supabase,
+  getGuardLoginStatus,
+  incrementFailedLogin,
+  resetLoginAttempts,
+} from "../src/lib/supabase";
 
 // Valid roles that can use the Guard app
 const AUTHORIZED_ROLES = ["GUARD", "SUPER_ADMIN"];
@@ -39,18 +44,19 @@ export default function LoginScreen() {
   const [lockoutRemaining, setLockoutRemaining] = useState<number>(0);
 
   // Check lockout status on mount and periodically
+  // Uses AsyncStorage as UX cache, but actual enforcement is server-side
   useEffect(() => {
     const checkLockout = async () => {
-      const data = await getRateLimitData();
-      if (data.lockoutUntil) {
-        const remaining = data.lockoutUntil - Date.now();
-        if (remaining > 0) {
-          setLockoutRemaining(Math.ceil(remaining / 1000 / 60));
-        } else {
-          // Lockout expired, reset
-          await resetRateLimit();
-          setLockoutRemaining(0);
-        }
+      // First check local cache for instant UI feedback
+      const localData = await getRateLimitData();
+      if (localData.lockoutUntil && localData.lockoutUntil > Date.now()) {
+        setLockoutRemaining(
+          Math.ceil((localData.lockoutUntil - Date.now()) / 1000 / 60)
+        );
+      } else if (localData.lockoutUntil) {
+        // Local lockout expired, clear it
+        await resetRateLimit();
+        setLockoutRemaining(0);
       }
     };
 
@@ -107,18 +113,28 @@ export default function LoginScreen() {
       return;
     }
 
-    // Check if locked out
-    const rateData = await getRateLimitData();
-    if (rateData.lockoutUntil && rateData.lockoutUntil > Date.now()) {
-      const mins = Math.ceil((rateData.lockoutUntil - Date.now()) / 1000 / 60);
-      setError(`Account locked. Try again in ${mins} minutes.`);
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
     try {
+      // Step 0: Check SERVER-SIDE lockout status (cannot be bypassed)
+      const serverStatus = await getGuardLoginStatus(email.trim());
+      if (serverStatus.isLocked) {
+        // Also update local cache for UI consistency
+        const lockoutUntil =
+          serverStatus.lockedUntil?.getTime() || Date.now() + 15 * 60 * 1000;
+        await setRateLimitData({
+          attempts: serverStatus.failedAttempts,
+          lockoutUntil,
+        });
+        setLockoutRemaining(serverStatus.remainingMinutes);
+        setError(
+          `Account locked. Try again in ${serverStatus.remainingMinutes} minutes.`
+        );
+        setIsLoading(false);
+        return;
+      }
+
       // Step 1: Authenticate with Supabase
       const { data: authData, error: authError } =
         await supabase.auth.signInWithPassword({
@@ -127,6 +143,8 @@ export default function LoginScreen() {
         });
 
       if (authError) {
+        // Auth failed - but we need the user ID to increment server-side counter
+        // For now, use local tracking as fallback since we don't have the user ID
         await incrementFailedAttempt();
         setIsLoading(false);
         return;
@@ -154,7 +172,21 @@ export default function LoginScreen() {
       if (userError || !userData) {
         console.log("[Login] FAILED: User not found in database");
         await supabase.auth.signOut();
-        setError("Account not found in system. Contact admin.");
+        // Increment server-side counter since we have the user ID
+        const result = await incrementFailedLogin(authData.user.id);
+        if (result.isNowLocked) {
+          const lockoutUntil = Date.now() + 15 * 60 * 1000;
+          await setRateLimitData({
+            attempts: result.failedAttempts,
+            lockoutUntil,
+          });
+          setLockoutRemaining(15);
+          setError("Too many failed attempts. Account locked for 15 minutes.");
+        } else {
+          setError(
+            `Account not found in system. Contact admin. (${result.remainingAttempts} attempts remaining)`
+          );
+        }
         setIsLoading(false);
         return;
       }
@@ -163,7 +195,18 @@ export default function LoginScreen() {
       if (!userData.is_active) {
         console.log("[Login] FAILED: Account deactivated");
         await supabase.auth.signOut();
-        setError("Your account has been deactivated");
+        const result = await incrementFailedLogin(authData.user.id);
+        if (result.isNowLocked) {
+          const lockoutUntil = Date.now() + 15 * 60 * 1000;
+          await setRateLimitData({
+            attempts: result.failedAttempts,
+            lockoutUntil,
+          });
+          setLockoutRemaining(15);
+          setError("Too many failed attempts. Account locked for 15 minutes.");
+        } else {
+          setError("Your account has been deactivated");
+        }
         setIsLoading(false);
         return;
       }
@@ -172,15 +215,28 @@ export default function LoginScreen() {
       if (!AUTHORIZED_ROLES.includes(userData.role)) {
         console.log("[Login] FAILED: Wrong role -", userData.role);
         await supabase.auth.signOut();
-        setError("Access Denied: Guard or Admin privileges required");
+        const result = await incrementFailedLogin(authData.user.id);
+        if (result.isNowLocked) {
+          const lockoutUntil = Date.now() + 15 * 60 * 1000;
+          await setRateLimitData({
+            attempts: result.failedAttempts,
+            lockoutUntil,
+          });
+          setLockoutRemaining(15);
+          setError("Too many failed attempts. Account locked for 15 minutes.");
+        } else {
+          setError("Access Denied: Guard or Admin privileges required");
+        }
         setIsLoading(false);
         return;
       }
 
       console.log("[Login] SUCCESS: All checks passed");
 
-      // Success! Reset rate limit and navigate explicitly
+      // Success! Reset both server and local rate limits
+      await resetLoginAttempts(authData.user.id);
       await resetRateLimit();
+      setLockoutRemaining(0);
       setIsLoading(false);
 
       // EXPLICIT NAVIGATION - Don't rely on _layout.tsx state changes

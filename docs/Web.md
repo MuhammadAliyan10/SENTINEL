@@ -109,7 +109,7 @@ The signature is generated using the student's secret Activation Token, which me
 - Old screenshots expire (timestamp validation)
 - The token never appears in the QR code itself
 
-QR codes refresh automatically every 60 seconds to maintain security while balancing server load.
+QR codes refresh automatically every 2 minutes to maintain security while balancing server load.
 
 ### Step 4: Venue Entry
 

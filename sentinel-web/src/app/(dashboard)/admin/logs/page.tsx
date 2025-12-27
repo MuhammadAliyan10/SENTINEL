@@ -2,12 +2,11 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin } from "@/actions/auth-actions";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
 
 // Components
 import { AuditStats } from "@/components/features/admin/audit/AuditStats";
 import { SystemLogsClient } from "@/components/features/admin/audit/SystemLogsClient";
+import { ExportAuditLogsButton } from "@/components/features/admin/audit/ExportAuditLogsButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
@@ -143,10 +142,7 @@ export default async function SystemLogsPage() {
             Immutable history of all administrative actions
           </p>
         </div>
-        <Button variant="outline" className="gap-2">
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
+        <ExportAuditLogsButton />
       </div>
 
       {/* Content */}

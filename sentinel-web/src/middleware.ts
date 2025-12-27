@@ -54,6 +54,52 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ============================================
+  // RATE LIMITING (Login Endpoints)
+  // ============================================
+  if (
+    (pathname.includes("/login") || pathname.includes("/api/guard/verify")) &&
+    request.method === "POST"
+  ) {
+    // Only run if Upstash is configured
+    if (
+      process.env.UPSTASH_REDIS_REST_URL &&
+      process.env.UPSTASH_REDIS_REST_TOKEN
+    ) {
+      try {
+        const { Ratelimit } = await import("@upstash/ratelimit");
+        const { Redis } = await import("@upstash/redis");
+
+        const redis = new Redis({
+          url: process.env.UPSTASH_REDIS_REST_URL,
+          token: process.env.UPSTASH_REDIS_REST_TOKEN,
+        });
+
+        const ratelimit = new Ratelimit({
+          redis,
+          limiter: Ratelimit.slidingWindow(10, "10 s"), // 10 requests per 10s
+          analytics: true,
+        });
+
+        const ip = request.headers.get("x-forwarded-for") ?? "anonymous";
+        const { success } = await ratelimit.limit(`ratelimit:${ip}`);
+
+        if (!success) {
+          return new NextResponse(
+            JSON.stringify({ error: "Too many requests" }),
+            {
+              status: 429,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+      } catch (error) {
+        console.error("Rate limit error:", error);
+        // Fail open (allow request) if rate limit fails
+      }
+    }
+  }
+
+  // ============================================
   // ADMIN ROUTES - Session Check Only
   // Role verification happens in layout.tsx
   // ============================================

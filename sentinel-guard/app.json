@@ -41,7 +41,8 @@
         {
           "cameraPermission": "Allow Sentinel Guard to access your camera for QR code scanning."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "router": {},

@@ -4,6 +4,12 @@ module.exports = {
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Figtree_400Regular"],
+        "sans-medium": ["Figtree_500Medium"],
+        "sans-semibold": ["Figtree_600SemiBold"],
+        "sans-bold": ["Figtree_700Bold"],
+      },
       colors: {
         primary: "#161622",
         secondary: {

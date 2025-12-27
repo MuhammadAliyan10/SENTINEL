@@ -1,15 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Figtree } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import NextTopLoader from "nextjs-toploader";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
+const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Sentinel | University Access Control",
@@ -39,9 +35,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="light">
+    <html
+      lang="en"
+      className={`${figtree.variable} light`}
+      suppressHydrationWarning
+    >
       <body
-        className={`${plusJakartaSans.variable} font-sans antialiased bg-background text-foreground`}
+        className={`${figtree.variable} font-sans antialiased bg-background text-foreground`}
         suppressHydrationWarning
       >
         <NextTopLoader

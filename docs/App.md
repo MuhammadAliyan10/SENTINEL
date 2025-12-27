@@ -618,18 +618,18 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph Entry["Entry Mode (Green)"]
+    subgraph Entry["Entry Mode - Green"]
         E1{Last Log Type?}
-        E1 -->|No Log| E2[First Entry<br/>APPROVED]
-        E1 -->|EXIT| E3[Re-Entry<br/>APPROVED]
-        E1 -->|ENTRY| E4[Already Inside<br/>REJECTED]
+        E1 -->|No Log| E2[First Entry APPROVED]
+        E1 -->|EXIT| E3[Re-Entry APPROVED]
+        E1 -->|ENTRY| E4[Already Inside REJECTED]
     end
 
-    subgraph Exit["Exit Mode (Indigo)"]
+    subgraph Exit["Exit Mode - Indigo"]
         X1{Last Log Type?}
-        X1 -->|ENTRY| X2[Exit Granted<br/>APPROVED]
-        X1 -->|No Log| X3[Not Inside<br/>REJECTED]
-        X1 -->|EXIT| X4[Not Inside<br/>REJECTED]
+        X1 -->|ENTRY| X2[Exit Granted APPROVED]
+        X1 -->|No Log| X3[Not Inside REJECTED]
+        X1 -->|EXIT| X4[Not Inside REJECTED]
     end
 
     style E2 fill:#dcfce7,stroke:#16a34a

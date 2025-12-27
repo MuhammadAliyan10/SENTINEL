@@ -423,8 +423,8 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[Student Loads Digital Pass] --> B[Server Generates Payload]
-    B --> C["Payload Contains:<br/>• SAP ID<br/>• Timestamp<br/>• 5-min Expiry"]
-    C --> D[Sign with HMAC using<br/>Activation Token as Secret]
+    B --> C[Payload: SAP ID + Timestamp + Expiry]
+    C --> D[Sign with HMAC using Token]
     D --> E[Return Encoded Payload to Client]
     E --> F[QR Code Rendered on Pass]
     F --> G[Auto-Refresh Every 60 Seconds]
@@ -477,8 +477,8 @@ flowchart LR
     subgraph Venue["Event Venue"]
         V1[Show QR Code to Guard] --> V2[Guard Scans with Mobile App]
         V2 --> V3{Validation}
-        V3 -->|Approved| V4[Entry Granted<br/>Pass Shows APPROVED]
-        V3 -->|Rejected| V5[Entry Denied<br/>Reason Displayed]
+        V3 -->|Approved| V4[Entry Granted - Pass Shows APPROVED]
+        V3 -->|Rejected| V5[Entry Denied - Reason Displayed]
     end
 
     M5 --> S1

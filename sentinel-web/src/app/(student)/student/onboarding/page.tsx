@@ -83,6 +83,27 @@ export default function OnboardingPage() {
       return;
     }
 
+    // FRONTEND VALIDATION: Check file sizes before upload (3MB limit)
+    const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB in bytes
+    if (profileFile.size > MAX_FILE_SIZE) {
+      toast.error(
+        `Profile photo is too large (${(profileFile.size / 1024 / 1024).toFixed(
+          1
+        )}MB). Maximum size is 3MB.`
+      );
+      setIsLoading(false);
+      return;
+    }
+    if (cardFile.size > MAX_FILE_SIZE) {
+      toast.error(
+        `University card is too large (${(cardFile.size / 1024 / 1024).toFixed(
+          1
+        )}MB). Maximum size is 3MB.`
+      );
+      setIsLoading(false);
+      return;
+    }
+
     const profileUrl = await handleImageUpload(profileFile, "avatars");
     const cardUrl = await handleImageUpload(cardFile, "id-cards");
 

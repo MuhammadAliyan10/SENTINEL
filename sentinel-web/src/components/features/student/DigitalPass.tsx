@@ -432,7 +432,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                 Department of Computer Science
               </p>
               <h1 className="text-white font-mono text-sm font-bold mt-1 tracking-tight">
-                ANNUAL DINNER 2025
+                ANNUAL DINNER 2026
               </h1>
             </div>
 

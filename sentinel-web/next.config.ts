@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
   turbopack: {},
   experimental: {
     serverActions: {
-      bodySizeLimit: "2mb",
+      bodySizeLimit: "3mb", // UPDATED: Increased from 2mb to 3mb for image uploads
     },
   },
   images: {

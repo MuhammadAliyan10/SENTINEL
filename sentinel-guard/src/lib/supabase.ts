@@ -296,16 +296,24 @@ export const getUserBySapId = async (sapId: string): Promise<UserData> => {
  */
 export const getRecentAccessLog = async (
   userId: string
-): Promise<AccessLogEntry | null> => {
+): Promise<(AccessLogEntry & { scanner_name?: string }) | null> => {
   // Extended to 24 hours for full-day event coverage
   const twentyFourHoursAgo = new Date(
     Date.now() - 24 * 60 * 60 * 1000
   ).toISOString();
 
-  const { data, error } = await performWithTimeout<AccessLogEntry>(
+  const { data, error } = await performWithTimeout<any>(
     supabase
       .from("access_logs")
-      .select("id, user_id, type, status, timestamp")
+      .select(`
+        id, 
+        user_id, 
+        type, 
+        status, 
+        timestamp, 
+        scanner_id,
+        scanner:scanner_id ( full_name )
+      `)
       .eq("user_id", userId)
       .gte("timestamp", twentyFourHoursAgo)
       .order("timestamp", { ascending: false })
@@ -321,7 +329,14 @@ export const getRecentAccessLog = async (
     return null;
   }
 
-  return data;
+  if (data) {
+    return {
+      ...data,
+      scanner_name: data.scanner?.full_name
+    };
+  }
+
+  return null;
 };
 
 /**
@@ -372,6 +387,27 @@ export const insertAccessLog = async (
     if (__DEV__) {
       console.error("[DB] insertAccessLog error:", error.message);
     }
+
+    // OFFLINE FALLBACK
+    // If error looks like network issue, save to local queue
+    if (
+      error.message === "Request timed out" ||
+      error.message?.includes("Network request failed") ||
+      error.code === "PGRST100" // PostgREST timeout/connection
+    ) {
+      const { saveOfflineLog } = require("./offline");
+      await saveOfflineLog({
+        id,
+        user_id: userId,
+        scanner_id: session?.userId || null,
+        type,
+        status,
+        event_id: resolvedEventId || undefined,
+        timestamp: new Date().toISOString()
+      });
+      return true; // We return true because it's "saved" (locally)
+    }
+
     return false;
   }
 
@@ -440,5 +476,55 @@ export const getAccessLogsWithUsers = async (
     user_id: log.user_id,
     user_name: log.users?.full_name || "Unknown",
     user_sap_id: log.users?.sap_id || "N/A",
+  }));
+};
+
+/**
+ * Fetch recent activity logs for a specific student (for duplicate feedback)
+ */
+export const getStudentActivityLogs = async (
+  userId: string,
+  limit: number = 100,
+  type?: "ENTRY" | "EXIT"
+): Promise<Array<AccessLogEntry & { scanner_name?: string }>> => {
+  let query = supabase
+    .from("access_logs")
+    .select(`
+      id,
+      user_id,
+      type,
+      status,
+      timestamp,
+      scanner_id,
+      scanner:scanner_id ( full_name )
+    `)
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(limit);
+
+  if (type) {
+    query = query.eq("type", type);
+  }
+
+  const { data, error } = await performWithTimeout<any[]>(
+    query as any,
+    "getStudentActivityLogs"
+  );
+
+  if (error) {
+    if (__DEV__) {
+      console.error("[DB] getStudentActivityLogs error:", error.message);
+    }
+    return [];
+  }
+
+  return (data || []).map((log: any) => ({
+    id: log.id,
+    timestamp: log.timestamp,
+    type: log.type,
+    status: log.status,
+    user_id: log.user_id,
+    scanner_id: log.scanner_id,
+    scanner_name: log.scanner?.full_name || "Unknown",
   }));
 };

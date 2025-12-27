@@ -138,7 +138,7 @@ export async function GET() {
     return Response.json(
       {
         payload: qrPayload,
-        expiresAt: timestamp + 5 * 60 * 1000, // Valid for 5 minutes
+        expiresAt: timestamp + 2 * 60 * 1000, // Valid for 2 minutes only (Prevents QR reuse/passback attacks)
       },
       {
         headers: {

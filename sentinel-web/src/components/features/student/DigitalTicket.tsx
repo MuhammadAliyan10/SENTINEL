@@ -50,7 +50,7 @@ export function DigitalTicket() {
   return (
     <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#4F39F6] to-[#6366F1] px-6 py-5 text-center">
+      <div className="bg-linear-to-r from-[#4F39F6] to-[#6366F1] px-6 py-5 text-center">
         <p className="text-white/70 text-xs uppercase tracking-widest mb-1">
           Department of Computer Science
         </p>
@@ -107,7 +107,7 @@ export function DigitalTicket() {
       {/* Identity Section */}
       <div className="px-6 py-6 flex items-center gap-4">
         {/* Photo */}
-        <div className="relative h-16 w-16 rounded-full overflow-hidden border-2 border-[#4F39F6]/20 flex-shrink-0">
+        <div className="relative h-16 w-16 rounded-full overflow-hidden border-2 border-[#4F39F6]/20 shrink-0">
           {profile.profilePhotoUrl ? (
             <Image
               src={profile.profilePhotoUrl}
@@ -135,7 +135,7 @@ export function DigitalTicket() {
           className={cn(
             "px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider",
             profile.isPaid
-              ? "bg-gradient-to-r from-emerald-400 to-emerald-500 text-white"
+              ? "bg-linear-to-r from-emerald-400 to-emerald-500 text-white"
               : "bg-slate-200 text-slate-500"
           )}
         >

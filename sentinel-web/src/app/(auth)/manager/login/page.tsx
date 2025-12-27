@@ -78,7 +78,7 @@ function ManagerLoginForm() {
           {/* University Logo */}
           <div className="flex justify-center">
             <Image
-              src="/UniversityLogo.jpeg"
+              src="/uolLogo.png"
               alt="University Logo"
               width={220}
               height={120}

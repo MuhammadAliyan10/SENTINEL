@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/MuhammadAliyan10/SENTINEL/tree/main/docs
+    about: Check our documentation for guides and reference
+  - name: 💬 Discussions
+    url: https://github.com/MuhammadAliyan10/SENTINEL/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 🔒 Security Vulnerability
+    url: https://github.com/MuhammadAliyan10/SENTINEL/security/policy
+    about: Report security vulnerabilities privately (do NOT use issues)

@@ -35,6 +35,9 @@ interface LiveEntry {
   full_name: string;
   sap_id: string;
   photo_url: string | null;
+  // NEW: Guard information
+  guard_name: string | null;
+  guard_sap_id: string | null;
 }
 
 function getInitials(name: string): string {
@@ -94,15 +97,33 @@ export function LiveDashboardClient() {
         const response = await fetch("/api/admin/live-scans");
         if (response.ok) {
           const data = await response.json();
+
+          // NEW: Set real-time stats from API instead of starting at 0
+          if (data.stats) {
+            setStats({
+              totalEntered: data.stats.totalEntered,
+              currentlyInside: data.stats.currentlyInside,
+              rejected: data.stats.rejected,
+            });
+          }
+
           // Transform API data to LiveEntry format
           const initialEntries = data.scans.map((scan: any) => ({
             id: scan.id,
             scanned_at: scan.timestamp,
-            status: scan.status,
+            status:
+              scan.status === "GRANTED"
+                ? "allowed"
+                : scan.status === "REJECTED"
+                ? "rejected"
+                : "re-entry",
             location: "Main Gate", // Default for now
             full_name: scan.user.fullName || "Unknown",
-            sap_id: "---", // API might not return SAP ID in the list view, need to check
+            sap_id: scan.user.sapId || "---", // NEW: Now included in API
             photo_url: scan.user.profilePhotoUrl,
+            // NEW: Guard information from API (fixed field name)
+            guard_name: scan.scanner?.fullName || null,
+            guard_sap_id: scan.scanner?.sapId || null,
           }));
           setEntries(initialEntries);
           if (initialEntries.length > 0) {
@@ -150,6 +171,8 @@ export function LiveDashboardClient() {
               full_name: (userData as any).full_name || "Unknown",
               sap_id: (userData as any).sap_id,
               photo_url: (userData as any).profile_photo_url,
+              guard_name: null,
+              guard_sap_id: null
             };
 
             setEntries((prev) => [newEntry, ...prev].slice(0, 50));
@@ -321,6 +344,15 @@ export function LiveDashboardClient() {
                         </code>
                         <span>•</span>
                         <span>{entry.location}</span>
+                        {/* NEW: Display Guard Name */}
+                        {entry.guard_name && (
+                          <>
+                            <span>•</span>
+                            <span className="text-xs text-primary/70">
+                              Guard: {entry.guard_name}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

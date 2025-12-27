@@ -54,8 +54,8 @@ export function DigitalTicket() {
         <p className="text-white/70 text-xs uppercase tracking-widest mb-1">
           Department of Computer Science
         </p>
-        <h2 className="text-white text-xl font-bold">Annual Dinner 2025</h2>
-        <p className="text-white/80 text-sm mt-1">December 18, 2024</p>
+        <h2 className="text-white text-xl font-bold">Annual Dinner 2026</h2>
+        <p className="text-red-900 text-sm mt-1">January 10, 2026</p>
       </div>
 
       {/* QR Section */}

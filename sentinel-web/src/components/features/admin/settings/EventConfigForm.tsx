@@ -100,7 +100,7 @@ export function EventConfigForm({ event }: EventConfigFormProps) {
             <Input
               id="name"
               {...register("name")}
-              placeholder="e.g., Annual Dinner 2025"
+              placeholder="e.g., Annual Dinner 2026"
               className="border-slate-200"
             />
             {errors.name && (

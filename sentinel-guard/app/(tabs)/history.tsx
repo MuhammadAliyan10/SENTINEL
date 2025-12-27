@@ -10,6 +10,7 @@ import { StatusBar } from "expo-status-bar";
 import { useState, useEffect, useCallback } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { getAccessLogsWithUsers } from "../../src/lib/supabase";
+import { formatTime, formatDate } from "../../src/utils/date";
 
 interface LogEntry {
   id: string;
@@ -50,72 +51,7 @@ export default function HistoryScreen() {
     setRefreshing(false);
   }, []);
 
-  // Ensure timestamp is parsed as UTC (Supabase may omit 'Z' suffix)
-  const parseAsUTC = (timestamp: string): Date => {
-    // If timestamp doesn't end with Z or timezone offset, treat as UTC
-    if (!timestamp.endsWith("Z") && !timestamp.includes("+")) {
-      return new Date(timestamp + "Z");
-    }
-    return new Date(timestamp);
-  };
-
-  // Format time - parse as UTC then convert to local device time
-  const formatTime = (timestamp: string) => {
-    try {
-      const date = parseAsUTC(timestamp);
-      if (isNaN(date.getTime())) return "--:--";
-
-      let hours = date.getHours(); // Local time (PKT on your device)
-      const minutes = date.getMinutes();
-      const ampm = hours >= 12 ? "PM" : "AM";
-      hours = hours % 12;
-      hours = hours ? hours : 12; // 0 becomes 12
-
-      const hoursStr = hours.toString().padStart(2, "0");
-      const minutesStr = minutes.toString().padStart(2, "0");
-
-      return `${hoursStr}:${minutesStr} ${ampm}`;
-    } catch {
-      return "--:--";
-    }
-  };
-
-  const formatDate = (timestamp: string) => {
-    try {
-      const date = parseAsUTC(timestamp);
-      if (isNaN(date.getTime())) return "";
-
-      const now = new Date();
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      // Compare dates in local timezone
-      const dateStr = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-      const todayStr = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-      const yesterdayStr = `${yesterday.getFullYear()}-${yesterday.getMonth()}-${yesterday.getDate()}`;
-
-      if (dateStr === todayStr) return "Today";
-      if (dateStr === yesterdayStr) return "Yesterday";
-
-      const months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-      return `${months[date.getMonth()]} ${date.getDate()}`;
-    } catch {
-      return "";
-    }
-  };
+  /* helpers moved to src/utils/date.ts */
 
   const renderItem = ({ item }: { item: LogEntry }) => {
     const isEntry = item.type === "ENTRY";
@@ -124,9 +60,8 @@ export default function HistoryScreen() {
       <View className="bg-black-100 rounded-xl p-3 mb-2 flex-row items-center border border-black-200">
         {/* Icon */}
         <View
-          className={`w-10 h-10 rounded-lg items-center justify-center mr-3 ${
-            isEntry ? "bg-emerald-500/20" : "bg-indigo-500/20"
-          }`}
+          className={`w-10 h-10 rounded-lg items-center justify-center mr-3 ${isEntry ? "bg-emerald-500/20" : "bg-indigo-500/20"
+            }`}
         >
           <Ionicons
             name={isEntry ? "arrow-down" : "arrow-up"}
@@ -148,14 +83,12 @@ export default function HistoryScreen() {
         {/* Time */}
         <View className="items-end">
           <View
-            className={`px-2 py-0.5 rounded mb-0.5 ${
-              isEntry ? "bg-emerald-500/20" : "bg-indigo-500/20"
-            }`}
+            className={`px-2 py-0.5 rounded mb-0.5 ${isEntry ? "bg-emerald-500/20" : "bg-indigo-500/20"
+              }`}
           >
             <Text
-              className={`text-xs font-bold ${
-                isEntry ? "text-emerald-400" : "text-indigo-400"
-              }`}
+              className={`text-xs font-bold ${isEntry ? "text-emerald-400" : "text-indigo-400"
+                }`}
             >
               {isEntry ? "IN" : "OUT"}
             </Text>

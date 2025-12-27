@@ -15,10 +15,13 @@ import ResultOverlay from "../../components/ResultOverlay";
 import {
   getUserBySapId,
   getRecentAccessLog,
+  getStudentActivityLogs,
   insertAccessLog,
   DatabaseError,
+  AccessLogEntry,
 } from "../../src/lib/supabase";
 import { verifyQrSignature, parseQrData } from "../../src/utils/security";
+import { syncOfflineLogs } from "../../src/lib/offline";
 
 const { width } = Dimensions.get("window");
 const FRAME_SIZE = width * 0.65;
@@ -35,9 +38,15 @@ type ScanResult = {
   section?: string;
   profilePhotoUrl?: string | null;
   reason?: string;
+  // Duplicate details
+  recentLogs?: any[]; // Full history
 };
 
 export default function ScannerScreen() {
+  // Sync offline logs on mount
+  useState(() => {
+    syncOfflineLogs();
+  });
   const [permission, requestPermission] = useCameraPermissions();
   const [mode, setMode] = useState<ScanMode>("ENTRY");
   const [isScanning, setIsScanning] = useState(true);
@@ -74,12 +83,37 @@ export default function ScannerScreen() {
       // Check Double Entry
       const lastLog = await getRecentAccessLog(user.id);
       let isReturning = false;
+      let duplicateError: string | null = null;
 
       if (mode === "ENTRY") {
-        if (lastLog?.type === "ENTRY") throw new Error("Already Inside");
+        if (lastLog?.type === "ENTRY") {
+          duplicateError = "Already Inside";
+        }
         if (lastLog?.type === "EXIT") isReturning = true;
       } else {
-        if (!lastLog || lastLog.type === "EXIT") throw new Error("Not Inside");
+        if (!lastLog || lastLog.type === "EXIT") {
+          duplicateError = "Not Inside"; // Or "Already Outside"
+        }
+      }
+
+      if (duplicateError) {
+        // Show detailed duplicate error (with history)
+        // If "Already Inside", show previous ENTRY logs
+        // If "Not Inside", show previous EXIT logs
+        const filterType = duplicateError === "Already Inside" ? "ENTRY" : "EXIT";
+        const recentLogs = await getStudentActivityLogs(user.id, 100, filterType);
+
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setScanResult({
+          status: "REJECTED",
+          reason: duplicateError,
+          name: user.full_name,
+          profilePhotoUrl: user.profile_photo_url,
+          // Pass duplicate details
+          recentLogs: recentLogs
+        });
+        setShowResult(true);
+        return;
       }
 
       // Log
@@ -214,9 +248,8 @@ export default function ScannerScreen() {
           {/* Flash */}
           <TouchableOpacity
             onPress={() => setFlashEnabled(!flashEnabled)}
-            className={`w-11 h-11 rounded-full items-center justify-center ${
-              flashEnabled ? "bg-secondary" : "bg-black/50"
-            }`}
+            className={`w-11 h-11 rounded-full items-center justify-center ${flashEnabled ? "bg-secondary" : "bg-black/50"
+              }`}
           >
             <Ionicons
               name={flashEnabled ? "flash" : "flash-outline"}
@@ -229,28 +262,24 @@ export default function ScannerScreen() {
           <View className="flex-row bg-black/50 rounded-xl p-1">
             <TouchableOpacity
               onPress={() => setMode("ENTRY")}
-              className={`px-5 py-2 rounded-lg ${
-                mode === "ENTRY" ? "bg-emerald-600" : ""
-              }`}
+              className={`px-5 py-2 rounded-lg ${mode === "ENTRY" ? "bg-emerald-600" : ""
+                }`}
             >
               <Text
-                className={`font-semibold ${
-                  mode === "ENTRY" ? "text-white" : "text-gray-100"
-                }`}
+                className={`font-semibold ${mode === "ENTRY" ? "text-white" : "text-gray-100"
+                  }`}
               >
                 ENTRY
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setMode("EXIT")}
-              className={`px-5 py-2 rounded-lg ${
-                mode === "EXIT" ? "bg-indigo-600" : ""
-              }`}
+              className={`px-5 py-2 rounded-lg ${mode === "EXIT" ? "bg-indigo-600" : ""
+                }`}
             >
               <Text
-                className={`font-semibold ${
-                  mode === "EXIT" ? "text-white" : "text-gray-100"
-                }`}
+                className={`font-semibold ${mode === "EXIT" ? "text-white" : "text-gray-100"
+                  }`}
               >
                 EXIT
               </Text>
@@ -288,6 +317,7 @@ export default function ScannerScreen() {
           section={scanResult.section}
           profilePhotoUrl={scanResult.profilePhotoUrl}
           reason={scanResult.reason}
+          recentLogs={scanResult.recentLogs}
           onDismiss={handleDismiss}
         />
       )}

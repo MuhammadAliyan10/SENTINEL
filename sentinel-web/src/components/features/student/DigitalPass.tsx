@@ -198,9 +198,46 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
     }
   }, [supabase, user.id]);
 
+  // ============================================
+  // REALTIME SUBSCRIPTION WITH FALLBACK POLLING
+  // ============================================
+  // Production-grade: monitors connection state, falls back to polling if realtime fails
+
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const lastRealtimeUpdateRef = useRef<number>(Date.now());
+  const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleAccessLogUpdate = useCallback(
+    (newLog: { type: string; timestamp: string }) => {
+      // Track that we received a realtime update
+      lastRealtimeUpdateRef.current = Date.now();
+
+      if (newLog.type === "ENTRY") {
+        setAccessState("INSIDE");
+        // Ensure timestamp is interpreted as UTC (append Z if missing)
+        const ts =
+          newLog.timestamp.endsWith("Z") || newLog.timestamp.includes("+")
+            ? newLog.timestamp
+            : newLog.timestamp + "Z";
+        setLastEntry(new Date(ts));
+        setHasEnteredBefore(true);
+        setIsFlipped(true); // Auto-flip to show approved stamp
+      } else if (newLog.type === "EXIT") {
+        setAccessState("OUTSIDE");
+        setLastEntry(null);
+        setIsFlipped(true); // Keep flipped to show OUTSIDE stamp
+      }
+    },
+    []
+  );
+
   const setupRealtimeSubscription = useCallback(() => {
     const channel = supabase
-      .channel(`access-logs-${user.id}`)
+      .channel(`access-logs-${user.id}`, {
+        config: {
+          presence: { key: user.id },
+        },
+      })
       .on(
         "postgres_changes",
         {
@@ -211,28 +248,81 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
         },
         (payload) => {
           const newLog = payload.new as { type: string; timestamp: string };
-          if (newLog.type === "ENTRY") {
-            setAccessState("INSIDE");
-            // Ensure timestamp is interpreted as UTC (append Z if missing)
-            const ts =
-              newLog.timestamp.endsWith("Z") || newLog.timestamp.includes("+")
-                ? newLog.timestamp
-                : newLog.timestamp + "Z";
-            setLastEntry(new Date(ts));
-            setHasEnteredBefore(true);
-            setIsFlipped(true); // Auto-flip to show approved stamp
-          } else if (newLog.type === "EXIT") {
-            setAccessState("OUTSIDE");
-            setLastEntry(null);
-            setIsFlipped(true); // Keep flipped to show OUTSIDE stamp
-          }
+          handleAccessLogUpdate(newLog);
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        // Track connection state for fallback logic
+        if (status === "SUBSCRIBED") {
+          setRealtimeConnected(true);
+          console.log("[Realtime] Connected successfully");
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+          setRealtimeConnected(false);
+          console.warn("[Realtime] Connection closed or error:", err?.message);
+        } else if (status === "TIMED_OUT") {
+          setRealtimeConnected(false);
+          console.warn("[Realtime] Connection timed out");
+        }
+      });
+
     return () => {
       supabase.removeChannel(channel);
+      setRealtimeConnected(false);
     };
-  }, [supabase, user.id]);
+  }, [supabase, user.id, handleAccessLogUpdate]);
+
+  // Fallback polling: polls database when realtime is not working
+  const setupFallbackPolling = useCallback(() => {
+    // Poll every 5 seconds when realtime is down, every 15s when connected (backup)
+    const pollInterval = realtimeConnected ? 15000 : 5000;
+
+    const poll = async () => {
+      // Skip if we got a realtime update in the last 10 seconds
+      const timeSinceLastUpdate = Date.now() - lastRealtimeUpdateRef.current;
+      if (realtimeConnected && timeSinceLastUpdate < 10000) {
+        return; // Realtime is working, skip poll
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("access_logs")
+          .select("type, timestamp")
+          .eq("user_id", user.id)
+          .order("timestamp", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data && !error) {
+          const logData = data as { type: string; timestamp: string };
+          const currentState = accessState;
+          const newState = logData.type === "ENTRY" ? "INSIDE" : "OUTSIDE";
+
+          // Only update if state actually changed (prevents unnecessary re-renders)
+          if (currentState !== newState) {
+            handleAccessLogUpdate(logData);
+            console.log("[Fallback] State updated via polling:", newState);
+          }
+        }
+      } catch (err) {
+        // Silent failure - don't spam console during offline
+      }
+    };
+
+    fallbackIntervalRef.current = setInterval(poll, pollInterval);
+
+    return () => {
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current);
+        fallbackIntervalRef.current = null;
+      }
+    };
+  }, [
+    supabase,
+    user.id,
+    realtimeConnected,
+    accessState,
+    handleAccessLogUpdate,
+  ]);
 
   const setupConnectivityMonitor = useCallback(() => {
     const handleOnline = () => setIsOffline(false);
@@ -246,13 +336,20 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
     };
   }, []);
 
+  // Main initialization effect
   useEffect(() => {
-    // PERFORMANCE FIX: Refresh every 60s instead of 15s (QR valid for 5 min)
-    // Reduces server load by 4x at 800 users
+    // PERFORMANCE FIX: Refresh QR every 60s instead of 15s (QR valid for 5 min)
     qrIntervalRef.current = setInterval(refreshQrPayload, 60000);
+
+    // Initial state check
     checkInitialAccessState();
+
+    // Setup realtime subscription
     const unsubscribeRealtime = setupRealtimeSubscription();
+
+    // Setup connectivity monitor
     const unsubscribeConnectivity = setupConnectivityMonitor();
+
     return () => {
       if (qrIntervalRef.current) clearInterval(qrIntervalRef.current);
       unsubscribeRealtime();
@@ -264,6 +361,14 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
     setupRealtimeSubscription,
     setupConnectivityMonitor,
   ]);
+
+  // Separate effect for fallback polling (re-creates when realtimeConnected changes)
+  useEffect(() => {
+    const unsubscribeFallback = setupFallbackPolling();
+    return () => {
+      unsubscribeFallback();
+    };
+  }, [setupFallbackPolling]);
 
   // ============================================
   // DRAG HANDLERS

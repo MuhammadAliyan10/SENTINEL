@@ -43,7 +43,7 @@ Send an email to the maintainers with:
 
 ### Data Protection
 
-- **HMAC-SHA256 signed QR codes** with 5-minute expiry
+- **HMAC-SHA256 signed QR codes** with 2-minute expiry
 - **Row Level Security (RLS)** on all database tables
 - **Input validation** using Zod schemas
 - **SQL injection prevention** via Prisma ORM

@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo-google-fonts/figtree": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.87.1",
@@ -19,10 +20,12 @@
     "expo-av": "~16.0.8",
     "expo-camera": "~17.0.10",
     "expo-constants": "^18.0.12",
+    "expo-font": "~14.0.10",
     "expo-haptics": "~15.0.8",
     "expo-linking": "^8.0.10",
     "expo-router": "^6.0.19",
     "expo-secure-store": "^15.0.8",
+    "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "nativewind": "^4.2.1",
     "otpauth": "^9.4.1",

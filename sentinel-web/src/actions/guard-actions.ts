@@ -320,6 +320,19 @@ export async function toggleGuardStatus(
       data: { isActive: !guard.isActive },
     });
 
+    // Audit log for guard status toggle
+    const adminId = await getAdminId();
+    await prisma.auditLog.create({
+      data: {
+        performerId: adminId,
+        action: guard.isActive ? "DEACTIVATE_GUARD" : "ACTIVATE_GUARD",
+        targetId: guardId,
+        details: `${
+          guard.isActive ? "Deactivated" : "Activated"
+        } guard account for ${guard.fullName}`,
+      },
+    });
+
     revalidatePath("/admin/guards");
 
     return {
@@ -453,5 +466,61 @@ export async function getGuardActivity(
   } catch (error) {
     console.error("Get Guard Activity Error:", error);
     return [];
+  }
+}
+
+// ============================================
+// EXPORT GUARDS (for CSV download)
+// ============================================
+
+export interface GuardExportRow {
+  fullName: string;
+  email: string;
+  createdAt: string;
+  isActive: string;
+  totalScans: number;
+}
+
+export async function getAllGuardsForExport(): Promise<{
+  success: boolean;
+  data: GuardExportRow[];
+  message?: string;
+}> {
+  try {
+    await getAdminId();
+
+    const guards = await prisma.user.findMany({
+      where: { role: "GUARD" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        fullName: true,
+        email: true,
+        createdAt: true,
+        isActive: true,
+        _count: {
+          select: { performedScans: true },
+        },
+      },
+    });
+
+    const exportData: GuardExportRow[] = guards.map((g) => ({
+      fullName: g.fullName || "N/A",
+      email: g.email || "N/A",
+      createdAt: g.createdAt.toISOString().split("T")[0],
+      isActive: g.isActive ? "Active" : "Inactive",
+      totalScans: g._count.performedScans,
+    }));
+
+    return {
+      success: true,
+      data: exportData,
+    };
+  } catch (error) {
+    console.error("Export Guards Error:", error);
+    return {
+      success: false,
+      data: [],
+      message: error instanceof Error ? error.message : "Export failed",
+    };
   }
 }

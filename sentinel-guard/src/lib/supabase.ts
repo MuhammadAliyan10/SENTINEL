@@ -127,11 +127,13 @@ const performWithTimeout = async <T>(
   promise: PromiseLike<{ data: T | null; error: any }>,
   operationName: string
 ): Promise<{ data: T | null; error: any }> => {
-  const timeoutPromise = new Promise<{ data: null; error: any }>((_, reject) => {
-    setTimeout(() => {
-      reject(new Error("Request timed out"));
-    }, NETWORK_TIMEOUT_MS);
-  });
+  const timeoutPromise = new Promise<{ data: null; error: any }>(
+    (_, reject) => {
+      setTimeout(() => {
+        reject(new Error("Request timed out"));
+      }, NETWORK_TIMEOUT_MS);
+    }
+  );
 
   try {
     // Promise.race requires strictly Promises, so we resolve the PromiseLike first
@@ -140,7 +142,10 @@ const performWithTimeout = async <T>(
     if (error.message === "Request timed out") {
       return {
         data: null,
-        error: { code: "PGRST100", message: "Network timeout - check connection" },
+        error: {
+          code: "PGRST100",
+          message: "Network timeout - check connection",
+        },
       };
     }
     throw error;
@@ -221,6 +226,175 @@ export class DatabaseError extends Error {
 }
 
 // ============================================================================
+// Server-Side Rate Limiting (Security Enhancement)
+// ============================================================================
+// These functions check/update rate limiting in the database, not AsyncStorage.
+// This prevents bypass by clearing app data or reinstalling.
+
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+export interface GuardLoginStatus {
+  isLocked: boolean;
+  lockedUntil: Date | null;
+  failedAttempts: number;
+  remainingMinutes: number;
+}
+
+/**
+ * Check if a guard account is locked due to too many failed attempts
+ * This queries the database directly - cannot be bypassed by clearing app data
+ */
+export const getGuardLoginStatus = async (
+  email: string
+): Promise<GuardLoginStatus> => {
+  try {
+    const { data, error } = await performWithTimeout<any>(
+      supabase
+        .from("users")
+        .select("failed_login_attempts, locked_until")
+        .eq("email", email.toLowerCase())
+        .single() as any,
+      "getGuardLoginStatus"
+    );
+
+    if (error || !data) {
+      // User not found or error - return unlocked (let auth handle it)
+      return {
+        isLocked: false,
+        lockedUntil: null,
+        failedAttempts: 0,
+        remainingMinutes: 0,
+      };
+    }
+
+    const lockedUntil = data.locked_until ? new Date(data.locked_until) : null;
+    const now = new Date();
+
+    // Check if lockout has expired
+    if (lockedUntil && lockedUntil > now) {
+      const remainingMs = lockedUntil.getTime() - now.getTime();
+      return {
+        isLocked: true,
+        lockedUntil,
+        failedAttempts: data.failed_login_attempts || 0,
+        remainingMinutes: Math.ceil(remainingMs / 60000),
+      };
+    }
+
+    return {
+      isLocked: false,
+      lockedUntil: null,
+      failedAttempts: data.failed_login_attempts || 0,
+      remainingMinutes: 0,
+    };
+  } catch (error) {
+    if (__DEV__) {
+      console.error("[DB] getGuardLoginStatus error:", error);
+    }
+    // On error, allow login attempt (let Supabase auth handle it)
+    return {
+      isLocked: false,
+      lockedUntil: null,
+      failedAttempts: 0,
+      remainingMinutes: 0,
+    };
+  }
+};
+
+/**
+ * Increment failed login attempts for a guard
+ * Returns true if account is now locked
+ */
+export const incrementFailedLogin = async (
+  userId: string
+): Promise<{
+  isNowLocked: boolean;
+  failedAttempts: number;
+  remainingAttempts: number;
+}> => {
+  try {
+    // First get current count
+    const { data: userData, error: fetchError } = await performWithTimeout<any>(
+      supabase
+        .from("users")
+        .select("failed_login_attempts")
+        .eq("id", userId)
+        .single() as any,
+      "getFailedAttempts"
+    );
+
+    if (fetchError || !userData) {
+      return {
+        isNowLocked: false,
+        failedAttempts: 0,
+        remainingAttempts: MAX_FAILED_ATTEMPTS,
+      };
+    }
+
+    const currentAttempts = userData.failed_login_attempts || 0;
+    const newAttempts = currentAttempts + 1;
+    const shouldLock = newAttempts >= MAX_FAILED_ATTEMPTS;
+
+    // Update the database
+    const updateData: any = {
+      failed_login_attempts: newAttempts,
+      last_failed_login: new Date().toISOString(),
+    };
+
+    if (shouldLock) {
+      updateData.locked_until = new Date(
+        Date.now() + LOCKOUT_DURATION_MS
+      ).toISOString();
+    }
+
+    await performWithTimeout(
+      supabase.from("users").update(updateData).eq("id", userId) as any,
+      "updateFailedAttempts"
+    );
+
+    return {
+      isNowLocked: shouldLock,
+      failedAttempts: newAttempts,
+      remainingAttempts: Math.max(0, MAX_FAILED_ATTEMPTS - newAttempts),
+    };
+  } catch (error) {
+    if (__DEV__) {
+      console.error("[DB] incrementFailedLogin error:", error);
+    }
+    return {
+      isNowLocked: false,
+      failedAttempts: 0,
+      remainingAttempts: MAX_FAILED_ATTEMPTS,
+    };
+  }
+};
+
+/**
+ * Reset failed login attempts on successful login
+ */
+export const resetLoginAttempts = async (userId: string): Promise<void> => {
+  try {
+    await performWithTimeout(
+      supabase
+        .from("users")
+        .update({
+          failed_login_attempts: 0,
+          locked_until: null,
+          last_failed_login: null,
+        })
+        .eq("id", userId) as any,
+      "resetLoginAttempts"
+    );
+  } catch (error) {
+    if (__DEV__) {
+      console.error("[DB] resetLoginAttempts error:", error);
+    }
+    // Non-critical - login still succeeds
+  }
+};
+
+// ============================================================================
 // Database Query Functions
 // ============================================================================
 
@@ -249,6 +423,8 @@ export const getUserBySapId = async (sapId: string): Promise<UserData> => {
     supabase
       .from("users")
       .select(
+        // SECURITY NOTE: activation_token is required for offline HMAC verification.
+        // This is a trade-off between security and reliability.
         "id, sap_id, full_name, semester, section, is_paid, is_active, activation_token, profile_photo_url"
       )
       .eq("sap_id", sapId)
@@ -305,15 +481,17 @@ export const getRecentAccessLog = async (
   const { data, error } = await performWithTimeout<any>(
     supabase
       .from("access_logs")
-      .select(`
-        id, 
-        user_id, 
-        type, 
-        status, 
-        timestamp, 
+      .select(
+        `
+        id,
+        user_id,
+        type,
+        status,
+        timestamp,
         scanner_id,
         scanner:scanner_id ( full_name )
-      `)
+      `
+      )
       .eq("user_id", userId)
       .gte("timestamp", twentyFourHoursAgo)
       .order("timestamp", { ascending: false })
@@ -332,7 +510,7 @@ export const getRecentAccessLog = async (
   if (data) {
     return {
       ...data,
-      scanner_name: data.scanner?.full_name
+      scanner_name: data.scanner?.full_name,
     };
   }
 
@@ -403,7 +581,7 @@ export const insertAccessLog = async (
         type,
         status,
         event_id: resolvedEventId || undefined,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
       return true; // We return true because it's "saved" (locally)
     }
@@ -489,7 +667,8 @@ export const getStudentActivityLogs = async (
 ): Promise<Array<AccessLogEntry & { scanner_name?: string }>> => {
   let query = supabase
     .from("access_logs")
-    .select(`
+    .select(
+      `
       id,
       user_id,
       type,
@@ -497,7 +676,8 @@ export const getStudentActivityLogs = async (
       timestamp,
       scanner_id,
       scanner:scanner_id ( full_name )
-    `)
+    `
+    )
     .eq("user_id", userId)
     .order("timestamp", { ascending: false })
     .limit(limit);

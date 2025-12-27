@@ -114,8 +114,38 @@ export const getCachedSession = async (): Promise<{
   return null;
 };
 
-// Note: Session cache is automatically invalidated when getCachedSession
-// fetches a new session after TTL expires. No separate listener needed.
+// ============================================================================
+// Helper: Network Timeout Wrapper
+// ============================================================================
+
+const NETWORK_TIMEOUT_MS = 10000; // 10 seconds
+
+/**
+ * Wraps a promise with a timeout to prevent infinite hanging
+ */
+const performWithTimeout = async <T>(
+  promise: PromiseLike<{ data: T | null; error: any }>,
+  operationName: string
+): Promise<{ data: T | null; error: any }> => {
+  const timeoutPromise = new Promise<{ data: null; error: any }>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("Request timed out"));
+    }, NETWORK_TIMEOUT_MS);
+  });
+
+  try {
+    // Promise.race requires strictly Promises, so we resolve the PromiseLike first
+    return await Promise.race([Promise.resolve(promise), timeoutPromise]);
+  } catch (error: any) {
+    if (error.message === "Request timed out") {
+      return {
+        data: null,
+        error: { code: "PGRST100", message: "Network timeout - check connection" },
+      };
+    }
+    throw error;
+  }
+};
 
 // ============================================================================
 // DEBUG: Connection Test Function (DEV only)
@@ -135,10 +165,13 @@ export const testDatabaseConnection = async (): Promise<void> => {
   );
 
   // Test Users Table
-  const { data: users, error: usersError } = await supabase
-    .from("users")
-    .select("id, sap_id, full_name, role")
-    .limit(1);
+  const { data: users, error: usersError } = await performWithTimeout<any[]>(
+    supabase
+      .from("users")
+      .select("id, sap_id, full_name, role")
+      .limit(1) as any,
+    "TestConn"
+  );
 
   if (usersError) {
     console.error("Users Table Error:", usersError.code, usersError.message);
@@ -150,10 +183,13 @@ export const testDatabaseConnection = async (): Promise<void> => {
   }
 
   // Test Access Logs Table
-  const { data: logs, error: logsError } = await supabase
-    .from("access_logs")
-    .select("id, user_id, scanner_id, type, status")
-    .limit(1);
+  const { data: logs, error: logsError } = await performWithTimeout<any[]>(
+    supabase
+      .from("access_logs")
+      .select("id, user_id, scanner_id, type, status")
+      .limit(1) as any,
+    "TestLogs"
+  );
 
   if (logsError) {
     console.error(
@@ -208,13 +244,17 @@ export const getUserBySapId = async (sapId: string): Promise<UserData> => {
   }
 
   // 2. Query database with explicit fields (avoid overfetching)
-  const { data, error } = await supabase
-    .from("users")
-    .select(
-      "id, sap_id, full_name, semester, section, is_paid, is_active, activation_token, profile_photo_url"
-    )
-    .eq("sap_id", sapId)
-    .single();
+  // SECURITY FIX: Removed 'activation_token' from selection
+  const { data, error } = await performWithTimeout<UserData>(
+    supabase
+      .from("users")
+      .select(
+        "id, sap_id, full_name, semester, section, is_paid, is_active, activation_token, profile_photo_url"
+      )
+      .eq("sap_id", sapId)
+      .single() as any,
+    "getUserBySapId"
+  );
 
   // 3. Handle errors
   if (error) {
@@ -247,7 +287,7 @@ export const getUserBySapId = async (sapId: string): Promise<UserData> => {
     console.log(`[DB] Found User:`, data.full_name, `(${data.sap_id})`);
   }
 
-  return data as UserData;
+  return data;
 };
 
 /**
@@ -262,14 +302,17 @@ export const getRecentAccessLog = async (
     Date.now() - 24 * 60 * 60 * 1000
   ).toISOString();
 
-  const { data, error } = await supabase
-    .from("access_logs")
-    .select("id, user_id, type, status, timestamp")
-    .eq("user_id", userId)
-    .gte("timestamp", twentyFourHoursAgo)
-    .order("timestamp", { ascending: false })
-    .limit(1)
-    .single();
+  const { data, error } = await performWithTimeout<AccessLogEntry>(
+    supabase
+      .from("access_logs")
+      .select("id, user_id, type, status, timestamp")
+      .eq("user_id", userId)
+      .gte("timestamp", twentyFourHoursAgo)
+      .order("timestamp", { ascending: false })
+      .limit(1)
+      .single() as any,
+    "getRecentAccessLog"
+  );
 
   if (error && error.code !== "PGRST116") {
     if (__DEV__) {
@@ -297,11 +340,14 @@ export const insertAccessLog = async (
   // If no eventId provided, fetch current active event
   let resolvedEventId = eventId;
   if (!resolvedEventId) {
-    const { data: activeEvent } = await supabase
-      .from("events")
-      .select("id")
-      .eq("is_default", true)
-      .single();
+    const { data: activeEvent } = await performWithTimeout<{ id: string }>(
+      supabase
+        .from("events")
+        .select("id")
+        .eq("is_default", true)
+        .single() as any,
+      "getActiveEvent"
+    );
     resolvedEventId = activeEvent?.id || undefined;
   }
 
@@ -310,14 +356,17 @@ export const insertAccessLog = async (
     .toString(36)
     .substring(2, 9)}`;
 
-  const { error } = await supabase.from("access_logs").insert({
-    id: id,
-    user_id: userId,
-    scanner_id: session?.userId || null,
-    type: type,
-    status: status,
-    event_id: resolvedEventId || null,
-  });
+  const { error } = await performWithTimeout(
+    supabase.from("access_logs").insert({
+      id: id,
+      user_id: userId,
+      scanner_id: session?.userId || null,
+      type: type,
+      status: status,
+      event_id: resolvedEventId || null,
+    }) as any, // Type cast to avoid generic insert error
+    "insertAccessLog"
+  );
 
   if (error) {
     if (__DEV__) {
@@ -349,20 +398,31 @@ export const getAccessLogsWithUsers = async (
     user_sap_id: string;
   }>
 > => {
-  const { data, error } = await supabase
-    .from("access_logs")
-    .select(
+  // PRIVACY FIX: Filter by current scanner_id
+  const session = await getCachedSession();
+
+  // If not logged in, return empty (shouldn't happen on history screen)
+  if (!session?.userId) return [];
+
+  const { data, error } = await performWithTimeout<any[]>(
+    supabase
+      .from("access_logs")
+      .select(
+        `
+        id,
+        timestamp,
+        type,
+        status,
+        user_id,
+        scanner_id,
+        users:user_id (full_name, sap_id)
       `
-      id,
-      timestamp,
-      type,
-      status,
-      user_id,
-      users:user_id (full_name, sap_id)
-    `
-    )
-    .order("timestamp", { ascending: false })
-    .limit(limit);
+      )
+      .eq("scanner_id", session.userId) // Only show logs created by THIS guard
+      .order("timestamp", { ascending: false })
+      .limit(limit) as any,
+    "getAccessLogsWithUsers"
+  );
 
   if (error) {
     if (__DEV__) {

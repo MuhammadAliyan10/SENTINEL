@@ -86,10 +86,23 @@ export function useOfflineQR(): UseOfflineQRReturn {
       setIsLoading(true);
       setError(null);
 
+      // Import supabase for auth token
+      const { supabase } = await import("../src/lib/supabase");
+
+      // Get auth session for Authorization header (required for native)
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("Not authenticated");
+      }
+
       const response = await fetch(SETUP_QR_ENDPOINT, {
         method: "GET",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
 
       if (!response.ok) {
@@ -160,10 +173,11 @@ export function useOfflineQR(): UseOfflineQRReturn {
     await fetchAndSaveSecret();
   }, [fetchAndSaveSecret]);
 
-  // Initialize on mount
+  // Initialize on mount ONLY (no deps to prevent infinite loop)
   useEffect(() => {
     loadSecret();
-  }, [loadSecret]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Start/stop the update interval
   useEffect(() => {

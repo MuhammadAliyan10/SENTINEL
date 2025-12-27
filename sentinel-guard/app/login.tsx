@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 
 // Valid roles that can use the Guard app
@@ -28,8 +30,10 @@ interface RateLimitData {
 }
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lockoutRemaining, setLockoutRemaining] = useState<number>(0);
@@ -135,21 +139,29 @@ export default function LoginScreen() {
       }
 
       // Step 2: Verify role from database
+      console.log("[Login] Checking user profile for ID:", authData.user.id);
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("role, is_active")
         .eq("id", authData.user.id)
         .single();
 
+      console.log("[Login] Profile result:", {
+        userData,
+        userError: userError?.message,
+      });
+
       if (userError || !userData) {
+        console.log("[Login] FAILED: User not found in database");
         await supabase.auth.signOut();
-        setError("Account not found in system");
+        setError("Account not found in system. Contact admin.");
         setIsLoading(false);
         return;
       }
 
       // Step 3: Verify account is active
       if (!userData.is_active) {
+        console.log("[Login] FAILED: Account deactivated");
         await supabase.auth.signOut();
         setError("Your account has been deactivated");
         setIsLoading(false);
@@ -158,14 +170,21 @@ export default function LoginScreen() {
 
       // Step 4: Verify role is authorized for Guard app
       if (!AUTHORIZED_ROLES.includes(userData.role)) {
+        console.log("[Login] FAILED: Wrong role -", userData.role);
         await supabase.auth.signOut();
         setError("Access Denied: Guard or Admin privileges required");
         setIsLoading(false);
         return;
       }
 
-      // Success! Reset rate limit and let _layout.tsx handle navigation
+      console.log("[Login] SUCCESS: All checks passed");
+
+      // Success! Reset rate limit and navigate explicitly
       await resetRateLimit();
+      setIsLoading(false);
+
+      // EXPLICIT NAVIGATION - Don't rely on _layout.tsx state changes
+      router.replace("/(tabs)");
     } catch (e: any) {
       setError(e.message || "An unexpected error occurred");
       setIsLoading(false);
@@ -173,6 +192,15 @@ export default function LoginScreen() {
   };
 
   const isLockedOut = lockoutRemaining > 0;
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Scroll to show password field when keyboard opens
+  const handlePasswordFocus = () => {
+    // Wait for keyboard to fully open before scrolling
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 150, animated: true });
+    }, 300);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-primary">
@@ -180,8 +208,19 @@ export default function LoginScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
       >
-        <View className="flex-1 px-8 justify-center">
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingVertical: 40,
+          }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          className="px-8"
+        >
           {/* Header */}
           <View className="items-center mb-12">
             <View className="w-20 h-20 rounded-2xl bg-secondary items-center justify-center mb-6">
@@ -242,16 +281,30 @@ export default function LoginScreen() {
             <Text className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider">
               Password
             </Text>
-            <TextInput
-              className="bg-black-100 text-white text-lg p-4 rounded-xl border border-black-200"
-              placeholder="••••••••"
-              placeholderTextColor="#CDCDE0"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoComplete="password"
-              editable={!isLockedOut}
-            />
+            <View className="relative">
+              <TextInput
+                className="bg-black-100 text-white text-lg p-4 pr-14 rounded-xl border border-black-200"
+                placeholder="••••••••"
+                placeholderTextColor="#CDCDE0"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoComplete="password"
+                editable={!isLockedOut}
+                onFocus={handlePasswordFocus}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-4"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={24}
+                  color="#CDCDE0"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Login Button */}
@@ -276,10 +329,10 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           {/* Footer */}
-          <Text className="text-gray-100/50 text-center mt-8 text-sm">
+          <Text className="text-gray-100/50 text-center mt-8 mb-12 text-sm">
             Authorized Personnel Only
           </Text>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

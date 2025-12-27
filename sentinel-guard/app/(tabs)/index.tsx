@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -45,8 +45,13 @@ export default function ScannerScreen() {
   const [showResult, setShowResult] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 
+  // Ref for synchronous scan lock (prevents race conditions)
+  const scanLockRef = useRef(false);
+
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (!isScanning) return;
+    // Synchronous check (useRef is immediate, useState is async)
+    if (scanLockRef.current || !isScanning) return;
+    scanLockRef.current = true;
     setIsScanning(false);
 
     try {
@@ -113,7 +118,10 @@ export default function ScannerScreen() {
   const handleDismiss = () => {
     setShowResult(false);
     setScanResult(null);
-    setTimeout(() => setIsScanning(true), 200);
+    setTimeout(() => {
+      scanLockRef.current = false; // Reset lock for next scan
+      setIsScanning(true);
+    }, 200);
   };
 
   // Corner component

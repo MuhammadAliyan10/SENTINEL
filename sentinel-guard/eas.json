@@ -11,11 +11,23 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ysgcdxelgdmzsvewgnmp.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzZ2NkeGVsZ2RtenN2ZXdnbm1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1MTU1OTMsImV4cCI6MjA4MTA5MTU5M30.qn21mAfSAoB8XjOIXDsnLHSaCxuushF_RofYdJSTk8c",
+        "EXPO_PUBLIC_QR_SECRET": "sentinel-hmac-secret-2024",
+        "EXPO_PUBLIC_API_URL": "https://sentineluol.vercel.app"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ysgcdxelgdmzsvewgnmp.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlzZ2NkeGVsZ2RtenN2ZXdnbm1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1MTU1OTMsImV4cCI6MjA4MTA5MTU5M30.qn21mAfSAoB8XjOIXDsnLHSaCxuushF_RofYdJSTk8c",
+        "EXPO_PUBLIC_QR_SECRET": "sentinel-hmac-secret-2024",
+        "EXPO_PUBLIC_API_URL": "https://sentineluol.vercel.app"
       }
     }
   },

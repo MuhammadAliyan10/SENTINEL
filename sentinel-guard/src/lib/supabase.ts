@@ -114,13 +114,8 @@ export const getCachedSession = async (): Promise<{
   return null;
 };
 
-// Clear cache on logout
-supabase.auth.onAuthStateChange((event) => {
-  if (event === "SIGNED_OUT") {
-    cachedSession = null;
-    sessionCacheTime = 0;
-  }
-});
+// Note: Session cache is automatically invalidated when getCachedSession
+// fetches a new session after TTL expires. No separate listener needed.
 
 // ============================================================================
 // DEBUG: Connection Test Function (DEV only)
@@ -287,16 +282,28 @@ export const getRecentAccessLog = async (
 };
 
 /**
- * Insert access log entry with scanner tracking
- * Now includes scanner_id for audit trail
+ * Insert access log entry with scanner and event tracking
+ * @param eventId - Optional event ID, will fetch active event if not provided
  */
 export const insertAccessLog = async (
   userId: string,
   type: "ENTRY" | "EXIT",
-  status: "GRANTED" | "REJECTED" | "DUPLICATE" = "GRANTED"
+  status: "GRANTED" | "REJECTED" | "DUPLICATE" = "GRANTED",
+  eventId?: string
 ): Promise<boolean> => {
   // Get current scanner's ID from cached session
   const session = await getCachedSession();
+
+  // If no eventId provided, fetch current active event
+  let resolvedEventId = eventId;
+  if (!resolvedEventId) {
+    const { data: activeEvent } = await supabase
+      .from("events")
+      .select("id")
+      .eq("is_default", true)
+      .single();
+    resolvedEventId = activeEvent?.id || undefined;
+  }
 
   // Generate a simple cuid-like ID
   const id = `c${Date.now().toString(36)}${Math.random()
@@ -306,9 +313,10 @@ export const insertAccessLog = async (
   const { error } = await supabase.from("access_logs").insert({
     id: id,
     user_id: userId,
-    scanner_id: session?.userId || null, // Now tracking who scanned!
+    scanner_id: session?.userId || null,
     type: type,
     status: status,
+    event_id: resolvedEventId || null,
   });
 
   if (error) {
@@ -319,7 +327,7 @@ export const insertAccessLog = async (
   }
 
   if (__DEV__) {
-    console.log("[DB] Access log created:", id, "by scanner:", session?.userId);
+    console.log("[DB] Access log created:", id, "event:", resolvedEventId);
   }
   return true;
 };

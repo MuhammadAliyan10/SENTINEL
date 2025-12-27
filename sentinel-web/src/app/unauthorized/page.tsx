@@ -11,7 +11,7 @@ import {
 
 export default function UnauthorizedPage() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-slate-50 to-white">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-linear-to-b from-slate-50 to-white">
       <Card className="w-full max-w-md shadow-lg border-border">
         <CardHeader className="text-center">
           <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">

@@ -307,7 +307,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
 
   return (
     <div
-      className="min-h-screen min-h-[100dvh] bg-white flex flex-col items-center relative overflow-hidden select-none"
+      className="min-h-dvh bg-white flex flex-col items-center relative overflow-hidden select-none"
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* SVG Straps - ON TOP of card (z-20) */}
@@ -483,7 +483,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
               {/* University Logo */}
               <div className="w-45 h-15 overflow-hidden mb-4">
                 <Image
-                  src="/UniversityLogo.jpeg"
+                  src="/uolLogo.png"
                   alt="University Logo"
                   width={60}
                   height={60}
@@ -501,7 +501,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                     className="object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/30 flex items-center justify-center text-primary font-bold text-xl">
+                  <div className="w-full h-full bg-linear-to-br from-primary/20 to-primary/30 flex items-center justify-center text-primary font-bold text-xl">
                     {user.fullName?.charAt(0) || "S"}
                   </div>
                 )}

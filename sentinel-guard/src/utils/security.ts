@@ -69,10 +69,14 @@ export function verifyQrSignature(payload: QrPayload, secret: string): boolean {
       return false;
     }
 
-    // 6. Timestamp Check (5 Minutes = 300,000ms) - matches web server
+    // === TIMESTAMP VALIDATION (SECURITY CRITICAL) ===
+    // Check if QR code is within the allowed validity window
+    // SYNC WITH WEB API: Both must use the same expiration time
     const now = Date.now();
     const diff = Math.abs(now - payload.ts);
-    const ALLOWED_WINDOW = 5 * 60 * 1000; // 5 minutes (same as web)
+
+    // OLD: const ALLOWED_WINDOW = 5 * 60 * 1000; // 5 minutes (SECURITY RISK: Allowed passback attacks)
+    const ALLOWED_WINDOW = 2 * 60 * 1000; // SECURITY FIX: 2 minutes (Matches Web API, prevents QR reuse)
 
     if (diff > ALLOWED_WINDOW) {
       if (__DEV__) {

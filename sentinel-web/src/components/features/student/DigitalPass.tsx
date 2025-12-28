@@ -674,7 +674,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                 }}
               >
                 <div
-                  className="px-8 py-3 border-4 border-emerald-500 bg-gradient-to-r from-emerald-500/40  via-emerald-500/70  to-emerald-500/40 rounded-lg"
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-500/40  via-emerald-500/70  to-emerald-500/40 rounded-lg"
                   style={{
                     transform: "rotate(-12deg)",
                   }}
@@ -705,7 +705,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                 }}
               >
                 <div
-                  className="px-8 py-3 border-4 border-blue-500 bg-gradient-to-r from-blue-500/40  via-blue-500/70  to-blue-500/40 rounded-lg"
+                  className="px-8 py-3  bg-gradient-to-r from-blue-500/40  via-blue-500/70  to-blue-500/40 rounded-lg"
                   style={{
                     transform: "rotate(12deg)",
                   }}

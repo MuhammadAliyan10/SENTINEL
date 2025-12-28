@@ -100,15 +100,21 @@ async function getDashboardData() {
         hourlyMap.set(hour, 0);
       }
 
-      // Count entries per hour
+      // Count entries per hour - FIXED: Use Pakistan timezone
       logs.forEach((log) => {
-        const hour = log.timestamp.getHours();
+        // Convert to Pakistan timezone (UTC+5)
+        const pktDate = new Date(
+          log.timestamp.toLocaleString("en-US", {
+            timeZone: "Asia/Karachi",
+          })
+        );
+        const hour = pktDate.getHours();
         hourlyMap.set(hour, (hourlyMap.get(hour) || 0) + 1);
       });
 
       // Convert to array with formatted hour labels
       return Array.from(hourlyMap.entries()).map(([hour, entries]) => ({
-        hour: `${String(hour).padStart(2, "0")}:00`, // 24-hour format
+        hour: `${String(hour).padStart(2, "0")}:00`, // 24-hour format in PKT
         entries,
       }));
     })(),
@@ -156,6 +162,7 @@ async function getDashboardData() {
     prisma.accessLog.count(),
   ]);
 
+  // Calculate revenue using dynamic ticket price from DB
   const revenue = paidCount * ticketPrice;
 
   return {

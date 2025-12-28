@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -249,12 +250,20 @@ export default function LoginScreen() {
 
   const isLockedOut = lockoutRemaining > 0;
   const scrollViewRef = useRef<ScrollView>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+
+  // Scroll to show email field when keyboard opens
+  const handleEmailFocus = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 100, animated: true });
+    }, 300);
+  };
 
   // Scroll to show password field when keyboard opens
   const handlePasswordFocus = () => {
-    // Wait for keyboard to fully open before scrolling
     setTimeout(() => {
-      scrollViewRef.current?.scrollTo({ y: 150, animated: true });
+      scrollViewRef.current?.scrollTo({ y: 300, animated: true });
     }, 300);
   };
 
@@ -270,26 +279,34 @@ export default function LoginScreen() {
           ref={scrollViewRef}
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: "center",
-            paddingVertical: 40,
+            paddingTop: 60,
+            paddingBottom: 40,
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           className="px-8"
         >
           {/* Header */}
-          <View className="items-center mb-12">
-            <View className="w-20 h-20 rounded-2xl bg-secondary items-center justify-center mb-6">
-              <Ionicons name="shield-checkmark" size={40} color="#161622" />
+          <View className="items-center mb-10">
+            {/* UOL Logo */}
+            <View className="mb-6">
+              <Image
+                source={require("../assets/uolLogo.png")}
+                style={{ width: 300, height: 130 }}
+                resizeMode="contain"
+              />
             </View>
+
+            {/* App Name */}
             <Text
-              className="text-white text-3xl tracking-tight"
-              style={{ fontWeight: "800", letterSpacing: -1 }}
+              className="text-secondary text-3xl mb-1"
+              style={{
+                fontFamily: "Figtree_800ExtraBold",
+                fontWeight: "800",
+                letterSpacing: -1,
+              }}
             >
               SENTINEL GUARD
-            </Text>
-            <Text className="text-gray-100 text-base mt-2">
-              Security Portal
             </Text>
           </View>
 
@@ -298,7 +315,10 @@ export default function LoginScreen() {
             <View className="bg-amber-500/20 border border-amber-500/50 rounded-xl p-4 mb-6">
               <View className="flex-row items-center justify-center">
                 <Ionicons name="lock-closed" size={20} color="#F59E0B" />
-                <Text className="text-amber-400 text-center font-medium ml-2">
+                <Text
+                  className="text-amber-400 text-center font-medium ml-2"
+                  style={{ fontFamily: "Figtree_500Medium" }}
+                >
                   Account locked for {lockoutRemaining} min
                 </Text>
               </View>
@@ -308,7 +328,10 @@ export default function LoginScreen() {
           {/* Error Message */}
           {error && !isLockedOut && (
             <View className="bg-rose-500/20 border border-rose-500/50 rounded-xl p-4 mb-6">
-              <Text className="text-rose-400 text-center font-medium">
+              <Text
+                className="text-rose-400 text-center font-medium"
+                style={{ fontFamily: "Figtree_500Medium" }}
+              >
                 {error}
               </Text>
             </View>
@@ -316,10 +339,15 @@ export default function LoginScreen() {
 
           {/* Email Input */}
           <View className="mb-4">
-            <Text className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider">
+            <Text
+              className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider"
+              style={{ fontFamily: "Figtree_700Bold" }}
+            >
               Email
             </Text>
             <TextInput
+              ref={emailInputRef}
+              style={{ fontFamily: "Figtree_400Regular" }}
               className="bg-black-100 text-white text-lg p-4 rounded-xl border border-black-200"
               placeholder="guard@university.edu"
               placeholderTextColor="#CDCDE0"
@@ -329,16 +357,22 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoComplete="email"
               editable={!isLockedOut}
+              onFocus={handleEmailFocus}
             />
           </View>
 
           {/* Password Input */}
           <View className="mb-8">
-            <Text className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider">
+            <Text
+              className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider"
+              style={{ fontFamily: "Figtree_700Bold" }}
+            >
               Password
             </Text>
             <View className="relative">
               <TextInput
+                ref={passwordInputRef}
+                style={{ fontFamily: "Figtree_400Regular" }}
                 className="bg-black-100 text-white text-lg p-4 pr-14 rounded-xl border border-black-200"
                 placeholder="••••••••"
                 placeholderTextColor="#CDCDE0"
@@ -377,7 +411,11 @@ export default function LoginScreen() {
             ) : (
               <Text
                 className="text-primary text-lg"
-                style={{ fontWeight: "800", letterSpacing: 0.5 }}
+                style={{
+                  fontFamily: "Figtree_800ExtraBold",
+                  fontWeight: "800",
+                  letterSpacing: 0.5,
+                }}
               >
                 {isLockedOut ? "LOCKED" : "AUTHENTICATE"}
               </Text>
@@ -385,7 +423,10 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           {/* Footer */}
-          <Text className="text-gray-100/50 text-center mt-8 mb-12 text-sm">
+          <Text
+            className="text-gray-100/50 text-center mt-8 mb-12 text-sm"
+            style={{ fontFamily: "Figtree_400Regular" }}
+          >
             Authorized Personnel Only
           </Text>
         </ScrollView>

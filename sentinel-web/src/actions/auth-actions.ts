@@ -194,11 +194,16 @@ function validateAdminRedirectPath(path: string | undefined): string {
 function validateManagerRedirectPath(path: string | undefined): string {
   const defaultPath = "/manager/dashboard";
   if (!path) return defaultPath;
+  // Reject invalid paths
   if (
     !path.startsWith("/manager") ||
     path.startsWith("//") ||
     path.includes(":")
   ) {
+    return defaultPath;
+  }
+  // Redirect bare /manager to /manager/dashboard (no page at /manager)
+  if (path === "/manager" || path === "/manager/") {
     return defaultPath;
   }
   return path;

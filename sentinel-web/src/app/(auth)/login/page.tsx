@@ -99,8 +99,8 @@ function StudentLoginForm() {
             <Image
               src="/uolLogo.png"
               alt="University Logo"
-              width={220}
-              height={120}
+              width={280}
+              height={150}
               priority
             />
           </div>

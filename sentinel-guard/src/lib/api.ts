@@ -57,6 +57,7 @@ export async function verifyQrHybrid(
   offlineVerifier: (qrData: string) => Promise<VerifyResponse | null>
 ): Promise<VerifyResponse> {
   const token = await getAccessToken();
+  console.log("[Hybrid] Token available:", !!token); // Debug log
 
   // No session = must be offline (shouldn't happen, but handle gracefully)
   if (!token) {
@@ -105,6 +106,40 @@ export async function verifyQrHybrid(
     const result = await response.json();
     return result;
   } catch (error: any) {
+    // If 401, try to refresh session and retry ONCE
+    if (error.message.includes("401")) {
+      console.log("[Hybrid] 401 received, attempting token refresh...");
+      const { data, error: refreshError } =
+        await supabase.auth.refreshSession();
+
+      if (!refreshError && data.session) {
+        const newToken = data.session.access_token;
+        console.log("[Hybrid] Token refreshed, retrying request...");
+
+        try {
+          const retryResponse = await fetch(
+            `${API_BASE_URL}/api/guard/verify`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${newToken}`,
+              },
+              body: JSON.stringify({ qrData, scanType }),
+            }
+          );
+
+          if (retryResponse.ok) {
+            return await retryResponse.json();
+          }
+        } catch (retryErr) {
+          console.log("[Hybrid] Retry failed:", retryErr);
+        }
+      } else {
+        console.log("[Hybrid] Token refresh failed:", refreshError);
+      }
+    }
+
     // Network failed - fallback to offline verification
     console.log("[Hybrid] Online failed, trying offline:", error.message);
 

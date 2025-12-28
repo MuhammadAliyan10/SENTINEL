@@ -1,10 +1,3 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Apply Figtree font by default to all text */
-@layer base {
-  * {
-    font-family: Figtree_400Regular;
-  }
-}

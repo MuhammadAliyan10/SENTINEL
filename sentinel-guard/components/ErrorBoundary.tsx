@@ -51,12 +51,18 @@ export default class ErrorBoundary extends Component<Props, State> {
             </View>
 
             {/* Error Title */}
-            <Text className="text-white text-2xl font-bold text-center mb-2">
+            <Text
+              className="text-white text-2xl font-bold text-center mb-2"
+              style={{ fontFamily: "Figtree_700Bold" }}
+            >
               Something Went Wrong
             </Text>
 
             {/* Error Description */}
-            <Text className="text-gray-100 text-center mb-6">
+            <Text
+              className="text-gray-100 text-center mb-6"
+              style={{ fontFamily: "Figtree_400Regular" }}
+            >
               The app encountered an unexpected error.{"\n"}
               Please try again.
             </Text>
@@ -64,7 +70,10 @@ export default class ErrorBoundary extends Component<Props, State> {
             {/* Error Details (DEV only) */}
             {__DEV__ && this.state.error && (
               <View className="bg-black-100 rounded-xl p-4 mb-6 w-full border border-black-200">
-                <Text className="text-rose-400 text-xs font-mono">
+                <Text
+                  className="text-rose-400 text-xs font-mono"
+                  style={{ fontFamily: "Figtree_400Regular" }}
+                >
                   {this.state.error.message}
                 </Text>
               </View>
@@ -76,7 +85,12 @@ export default class ErrorBoundary extends Component<Props, State> {
               className="bg-secondary py-4 px-8 rounded-xl"
               activeOpacity={0.8}
             >
-              <Text className="text-primary font-bold text-lg">Try Again</Text>
+              <Text
+                className="text-primary font-bold text-lg"
+                style={{ fontFamily: "Figtree_700Bold" }}
+              >
+                Try Again
+              </Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>

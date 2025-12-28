@@ -12,6 +12,7 @@ import {
   Figtree_500Medium,
   Figtree_600SemiBold,
   Figtree_700Bold,
+  Figtree_800ExtraBold,
 } from "@expo-google-fonts/figtree";
 import "../global.css";
 
@@ -106,11 +107,13 @@ function RootLayoutNav() {
   return (
     <>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="login" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="profile-error" />
-      </Stack>
+      <ErrorBoundary>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="login" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="profile-error" />
+        </Stack>
+      </ErrorBoundary>
     </>
   );
 }
@@ -124,6 +127,7 @@ export default function RootLayout() {
     Figtree_500Medium,
     Figtree_600SemiBold,
     Figtree_700Bold,
+    Figtree_800ExtraBold,
   });
 
   const onLayoutRootView = useCallback(async () => {

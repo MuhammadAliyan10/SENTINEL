@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,14 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import ResultOverlay from "../../components/ResultOverlay";
 import { verifyQrHybrid, VerifyResponse } from "../../src/lib/api";
 import {
@@ -24,9 +32,7 @@ import { verifyQrSignature, parseQrData } from "../../src/utils/security";
 import { syncOfflineLogs } from "../../src/lib/offline";
 
 const { width } = Dimensions.get("window");
-const FRAME_SIZE = width * 0.65;
-const CORNER_SIZE = 40;
-const CORNER_WIDTH = 4;
+const FRAME_SIZE = width * 0.75; // Larger scanning area
 
 type ScanMode = "ENTRY" | "EXIT";
 type ScanResult = {
@@ -166,6 +172,9 @@ export default function ScannerScreen() {
     scanLockRef.current = true;
     setIsScanning(false);
 
+    // INSTANT FEEDBACK: Haptics
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     try {
       // HYBRID VERIFICATION: Try online, fallback to offline
       const result = await verifyQrHybrid(data, mode, offlineVerify);
@@ -173,14 +182,15 @@ export default function ScannerScreen() {
       if (!result.success) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
-        // Handle duplicates with history
+        // Handle duplicates with history - filter by type
         let recentLogs = undefined;
         if (result.status === "DUPLICATE" && result.student?.id) {
+          // Already Inside = show all ENTRY logs, Already Outside = show all EXIT logs
           const filterType =
             result.reason === "Already Inside" ? "ENTRY" : "EXIT";
           recentLogs = await getStudentActivityLogs(
             result.student.id,
-            100,
+            10,
             filterType
           );
         }
@@ -227,53 +237,107 @@ export default function ScannerScreen() {
     }, 200);
   };
 
-  // Corner component
+  // Corner component with rounded edges and heartbeat animation - Expo style
   const Corner = ({ position }: { position: "tl" | "tr" | "bl" | "br" }) => {
-    const color = mode === "ENTRY" ? "#10B981" : "#6366F1";
-    const styles: any = {
-      position: "absolute",
-      width: CORNER_SIZE,
-      height: CORNER_SIZE,
-    };
-    if (position.includes("t")) styles.top = 0;
-    if (position.includes("b")) styles.bottom = 0;
-    if (position.includes("l")) styles.left = 0;
-    if (position.includes("r")) styles.right = 0;
+    const color = mode === "ENTRY" ? "#FFFFFF" : "#DC2626"; // White for ENTRY, Red for EXIT
 
-    return (
-      <View style={styles}>
-        {/* Horizontal bar */}
-        <View
-          style={{
-            position: "absolute",
-            height: CORNER_WIDTH,
-            width: CORNER_SIZE,
-            backgroundColor: color,
-            borderRadius: 2,
-            ...(position.includes("t") ? { top: 0 } : { bottom: 0 }),
-            ...(position.includes("l") ? { left: 0 } : { right: 0 }),
-          }}
-        />
-        {/* Vertical bar */}
-        <View
-          style={{
-            position: "absolute",
-            width: CORNER_WIDTH,
-            height: CORNER_SIZE,
-            backgroundColor: color,
-            borderRadius: 2,
-            ...(position.includes("t") ? { top: 0 } : { bottom: 0 }),
-            ...(position.includes("l") ? { left: 0 } : { right: 0 }),
-          }}
-        />
-      </View>
-    );
+    // Heartbeat animation
+    const scale = useSharedValue(1);
+
+    useEffect(() => {
+      scale.value = withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 300, easing: Easing.ease }),
+          withTiming(1, { duration: 300, easing: Easing.ease }),
+          withTiming(1.08, { duration: 300, easing: Easing.ease }),
+          withTiming(1, { duration: 500, easing: Easing.ease })
+        ),
+        -1, // infinite
+        false
+      );
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => {
+      return {
+        transform: [{ scale: scale.value }],
+      };
+    });
+
+    // Dynamic styles for the corner
+    const getCornerStyle = () => {
+      const baseStyle: any = {
+        position: "absolute",
+        width: 60, // Wider to match image
+        height: 60,
+        borderColor: color,
+        borderWidth: 8, // Thicker stroke
+        borderRadius: 30, // Very rounded
+      };
+
+      // Hide borders that shouldn't be visible for this corner to create the L-shape
+      if (position === "tl") {
+        return {
+          ...baseStyle,
+          top: 0,
+          left: 0,
+          borderRightWidth: 0,
+          borderBottomWidth: 0,
+          borderTopRightRadius: 0,
+          borderBottomLeftRadius: 0,
+          borderBottomRightRadius: 0,
+        };
+      }
+      if (position === "tr") {
+        return {
+          ...baseStyle,
+          top: 0,
+          right: 0,
+          borderLeftWidth: 0,
+          borderBottomWidth: 0,
+          borderTopLeftRadius: 0,
+          borderBottomLeftRadius: 0,
+          borderBottomRightRadius: 0,
+        };
+      }
+      if (position === "bl") {
+        return {
+          ...baseStyle,
+          bottom: 0,
+          left: 0,
+          borderRightWidth: 0,
+          borderTopWidth: 0,
+          borderTopRightRadius: 0,
+          borderTopLeftRadius: 0,
+          borderBottomRightRadius: 0,
+        };
+      }
+      if (position === "br") {
+        return {
+          ...baseStyle,
+          bottom: 0,
+          right: 0,
+          borderLeftWidth: 0,
+          borderTopWidth: 0,
+          borderTopRightRadius: 0,
+          borderTopLeftRadius: 0,
+          borderBottomLeftRadius: 0,
+        };
+      }
+      return baseStyle;
+    };
+
+    return <Animated.View style={[getCornerStyle(), animatedStyle]} />;
   };
 
   if (!permission) {
     return (
       <View className="flex-1 bg-primary items-center justify-center">
-        <Text className="text-white">Loading...</Text>
+        <Text
+          className="text-white"
+          style={{ fontFamily: "Figtree_400Regular" }}
+        >
+          Loading...
+        </Text>
       </View>
     );
   }
@@ -283,17 +347,28 @@ export default function ScannerScreen() {
       <SafeAreaView className="flex-1 bg-primary items-center justify-center px-8">
         <StatusBar style="light" />
         <Ionicons name="camera-outline" size={64} color="#FF9C01" />
-        <Text className="text-white text-lg font-bold mt-4 mb-2">
+        <Text
+          className="text-white text-lg font-bold mt-4 mb-2"
+          style={{ fontFamily: "Figtree_700Bold" }}
+        >
           Camera Access
         </Text>
-        <Text className="text-gray-100 text-center mb-6">
+        <Text
+          className="text-gray-100 text-center mb-6"
+          style={{ fontFamily: "Figtree_400Regular" }}
+        >
           Required to scan QR codes
         </Text>
         <TouchableOpacity
           onPress={requestPermission}
           className="bg-secondary px-6 py-3 rounded-xl"
         >
-          <Text className="text-primary font-bold">Grant Access</Text>
+          <Text
+            className="text-primary font-bold"
+            style={{ fontFamily: "Figtree_700Bold" }}
+          >
+            Grant Access
+          </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -340,6 +415,7 @@ export default function ScannerScreen() {
                 className={`font-semibold ${
                   mode === "ENTRY" ? "text-white" : "text-gray-100"
                 }`}
+                style={{ fontFamily: "Figtree_600SemiBold" }}
               >
                 ENTRY
               </Text>
@@ -347,13 +423,14 @@ export default function ScannerScreen() {
             <TouchableOpacity
               onPress={() => setMode("EXIT")}
               className={`px-5 py-2 rounded-lg ${
-                mode === "EXIT" ? "bg-indigo-600" : ""
+                mode === "EXIT" ? "bg-rose-600" : ""
               }`}
             >
               <Text
                 className={`font-semibold ${
                   mode === "EXIT" ? "text-white" : "text-gray-100"
                 }`}
+                style={{ fontFamily: "Figtree_600SemiBold" }}
               >
                 EXIT
               </Text>
@@ -375,7 +452,12 @@ export default function ScannerScreen() {
             <Corner position="bl" />
             <Corner position="br" />
           </View>
-          <Text className="text-white/60 text-sm mt-4">Point at QR Code</Text>
+          <Text
+            className="text-white/60 text-sm mt-4"
+            style={{ fontFamily: "Figtree_400Regular" }}
+          >
+            Point at QR Code
+          </Text>
         </View>
       </SafeAreaView>
 

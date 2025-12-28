@@ -586,12 +586,12 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
             {/* Back content */}
             <div className="h-full flex flex-col items-center p-5 pt-8">
               {/* University Logo */}
-              <div className="w-36 h-15  mb-4">
+              <div className="w-50 h-15">
                 <Image
                   src="/uolLogo.png"
                   alt="University Logo"
-                  width={144}
-                  height={60}
+                  width={210}
+                  height={120}
                   priority
                   className="object-contain"
                 />

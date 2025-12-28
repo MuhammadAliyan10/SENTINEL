@@ -23,6 +23,10 @@ function validateRedirectPath(path: string | null): string {
   ) {
     return defaultPath;
   }
+  // Redirect bare /manager to /manager/dashboard (no page at /manager)
+  if (path === "/manager" || path === "/manager/") {
+    return defaultPath;
+  }
   return path;
 }
 
@@ -75,13 +79,12 @@ function ManagerLoginForm() {
       {/* Logo Section */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         <div className="w-full max-w-sm space-y-8">
-          {/* University Logo */}
           <div className="flex justify-center">
             <Image
               src="/uolLogo.png"
               alt="University Logo"
-              width={220}
-              height={120}
+              width={280}
+              height={150}
               className=""
               priority
             />

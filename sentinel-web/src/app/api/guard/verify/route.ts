@@ -52,9 +52,37 @@ export async function POST(request: NextRequest) {
     // 1. AUTHENTICATE GUARD
     // ============================================
     const supabase = await createClient();
-    const {
+    let {
       data: { user },
     } = await supabase.auth.getUser();
+
+    // FALLBACK: Check Authorization header for Mobile App (Bearer Token)
+    if (!user) {
+      const authHeader = request.headers.get("Authorization");
+      console.log("[API] Auth Header:", authHeader ? "Present" : "Missing"); // DEBUG
+
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        console.log("[API] Token extracted, verifying..."); // DEBUG
+
+        const {
+          data: { user: mobileUser },
+          error: mobileError,
+        } = await supabase.auth.getUser(token);
+
+        if (mobileError) {
+          console.error(
+            "[API] Token verification failed:",
+            mobileError.message
+          ); // DEBUG
+        }
+
+        if (mobileUser) {
+          console.log("[API] Token verified for user:", mobileUser.id); // DEBUG
+          user = mobileUser;
+        }
+      }
+    }
 
     if (!user) {
       reqLogger.warn("Unauthenticated verification attempt");

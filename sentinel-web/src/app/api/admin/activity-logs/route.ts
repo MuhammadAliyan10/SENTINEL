@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
           id: true,
           timestamp: true,
           status: true,
+          type: true,
           gateNumber: true,
           user: {
             select: {

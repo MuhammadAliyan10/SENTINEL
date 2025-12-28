@@ -32,6 +32,7 @@ interface AccessLog {
   id: string;
   timestamp: Date;
   status: string;
+  type: "ENTRY" | "EXIT";
   gateNumber: string | null;
   user: {
     sapId: string;
@@ -46,15 +47,32 @@ interface RecentActivityListProps {
   className?: string;
 }
 
-function StatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case "GRANTED":
+function StatusBadge({
+  status,
+  type,
+}: {
+  status: string;
+  type: "ENTRY" | "EXIT";
+}) {
+  if (status === "GRANTED") {
+    if (type === "ENTRY") {
       return (
-        <Badge className="bg-green-100 text-green-700 border-green-200 gap-1">
+        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1">
           <CheckCircle2 className="h-3 w-3" />
-          Granted
+          Entered
         </Badge>
       );
+    } else {
+      return (
+        <Badge className="bg-orange-100 text-orange-700 border-orange-200 gap-1">
+          <CheckCircle2 className="h-3 w-3" />
+          Exited
+        </Badge>
+      );
+    }
+  }
+
+  switch (status) {
     case "REJECTED":
       return (
         <Badge className="bg-red-100 text-red-700 border-red-200 gap-1">
@@ -165,14 +183,19 @@ export function RecentActivityList({
               {filteredLogs.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="font-mono text-sm">
-                    {new Date(log.timestamp).toLocaleTimeString()}
+                    {new Date(log.timestamp).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true,
+                      timeZone: "Asia/Karachi",
+                    })}
                   </TableCell>
                   <TableCell className="font-mono">
                     {log.user?.sapId || "—"}
                   </TableCell>
                   <TableCell>{log.user?.fullName || "Unknown"}</TableCell>
                   <TableCell>
-                    <StatusBadge status={log.status} />
+                    <StatusBadge status={log.status} type={log.type} />
                   </TableCell>
                   <TableCell>{log.gateNumber || "—"}</TableCell>
                 </TableRow>

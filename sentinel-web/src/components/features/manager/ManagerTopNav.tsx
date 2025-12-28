@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export function ManagerTopNav() {
   const pathname = usePathname();
@@ -18,7 +19,8 @@ export function ManagerTopNav() {
   };
 
   const navItems = [
-    { href: "/manager/dashboard", label: "Dashboard" },
+    { href: "/manager/dashboard", label: "Issue Pass" },
+    { href: "/manager/summary", label: "Summary" },
     { href: "/manager/profile", label: "Profile" },
   ];
 
@@ -26,8 +28,13 @@ export function ManagerTopNav() {
     <header className="bg-white border-b border-border h-16 px-6 flex items-center justify-between">
       <div className="flex items-center gap-8">
         <div className="flex items-center gap-2 font-bold text-xl text-primary">
-          <Shield className="h-6 w-6" />
-          <span>Sentinel</span>
+          <Image
+            src="/Logo.png"
+            alt="UOL Logo"
+            width={32}
+            height={32}
+            className="h-20 w-20 object-contain"
+          />
         </div>
         <nav className="hidden md:flex gap-6">
           {navItems.map((item) => (

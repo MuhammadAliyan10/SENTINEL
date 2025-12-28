@@ -52,7 +52,7 @@ export default async function ManagerDashboardPage({
             Hello, {user.fullName?.split(" ")[0] || "Manager"}
           </h1>
           <div className="flex items-center gap-2 mt-1">
-            <Badge variant="secondary" className="font-mono">
+            <Badge variant="default" className="font-mono">
               {user.role}
             </Badge>
             {user.section && (

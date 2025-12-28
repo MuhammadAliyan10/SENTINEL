@@ -297,42 +297,33 @@ export default async function AuditPage({ searchParams }: PageProps) {
               Showing page {page} of {pageCount}
             </span>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                asChild={page > 1}
-              >
-                {page > 1 ? (
+              {page > 1 ? (
+                <Button variant="outline" size="sm" asChild>
                   <Link href={`?page=${page - 1}`}>
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     Previous
                   </Link>
-                ) : (
-                  <>
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Previous
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= pageCount}
-                asChild={page < pageCount}
-              >
-                {page < pageCount ? (
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled>
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+              )}
+
+              {page < pageCount ? (
+                <Button variant="outline" size="sm" asChild>
                   <Link href={`?page=${page + 1}`}>
                     Next
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Link>
-                ) : (
-                  <>
-                    Next
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </>
-                )}
-              </Button>
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" disabled>
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              )}
             </div>
           </CardFooter>
         )}

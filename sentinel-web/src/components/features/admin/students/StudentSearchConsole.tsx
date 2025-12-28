@@ -37,16 +37,17 @@ export function StudentSearchConsole() {
     });
   };
 
-  // Debounce search
+  // Debounce search - increased delay for better performance
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (query.trim().length >= 3) {
+      // Require 4 characters minimum since first 3 digits are same for everyone
+      if (query.trim().length >= 4) {
         performSearch(query);
       } else if (query.trim().length === 0) {
         setResults([]);
         setHasSearched(false);
       }
-    }, 500);
+    }, 600); // Slightly longer debounce for better performance
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,7 +66,7 @@ export function StudentSearchConsole() {
             Student Directory
           </h2>
           <p className="text-muted-foreground text-lg">
-            Search for students by name or SAP ID to manage their profiles
+            Search for students by name or SAP ID (last 4-5 digits)
           </p>
         </div>
 
@@ -74,21 +75,38 @@ export function StudentSearchConsole() {
             <Search className="h-5 w-5 text-muted-foreground" />
           </div>
           <Input
-            className="h-14 pl-12 pr-12 text-lg bg-white border-slate-200 focus:border-primary focus:ring-primary/20 rounded-xl"
-            placeholder="Search by Name or SAP ID..."
+            className="h-14 pl-12 pr-32 text-lg bg-white border-slate-200 focus:border-primary focus:ring-primary/20 rounded-xl"
+            placeholder="Search by Name or Last 5 Digits of SAP ID..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            maxLength={50}
           />
-          {isPending && (
-            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+          <div className="absolute inset-y-0 right-0 pr-4 flex items-center gap-2">
+            {query.length > 0 && (
+              <span
+                className={cn(
+                  "text-xs font-medium px-2 py-1 rounded",
+                  query.length >= 4
+                    ? "text-emerald-600 bg-emerald-50"
+                    : "text-amber-600 bg-amber-50"
+                )}
+              >
+                {query.length}/50
+              </span>
+            )}
+            {isPending && (
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {!hasSearched && (
+        {!hasSearched && query.length < 4 && (
           <p className="text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-2">
-            Type at least 3 characters to start searching
+            {query.length === 0
+              ? "💡 Tip: Type at least 4 characters to start searching (e.g., last 5 digits of SAP ID)"
+              : `Type ${4 - query.length} more character${
+                  4 - query.length === 1 ? "" : "s"
+                } to search`}
           </p>
         )}
       </div>

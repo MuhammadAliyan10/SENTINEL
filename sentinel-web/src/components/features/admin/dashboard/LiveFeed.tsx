@@ -11,6 +11,7 @@ interface LiveScan {
   id: string;
   timestamp: Date | string;
   status: "GRANTED" | "REJECTED" | "DUPLICATE";
+  type: "ENTRY" | "EXIT";
   user: {
     fullName: string | null;
     profilePhotoUrl: string | null;
@@ -45,14 +46,27 @@ export function LiveFeed({ initialData }: LiveFeedProps) {
     return () => clearInterval(interval);
   }, [isPolling]);
 
-  const getStatusConfig = (status: LiveScan["status"]) => {
-    switch (status) {
-      case "GRANTED":
+  const getStatusConfig = (
+    status: LiveScan["status"],
+    type: LiveScan["type"]
+  ) => {
+    if (status === "GRANTED") {
+      if (type === "ENTRY") {
         return {
           bg: "bg-white",
           text: "text-emerald-600",
           label: "Entered",
         };
+      } else {
+        return {
+          bg: "bg-white",
+          text: "text-orange-600",
+          label: "Exited",
+        };
+      }
+    }
+
+    switch (status) {
       case "REJECTED":
         return {
           bg: "bg-red-50",
@@ -82,7 +96,7 @@ export function LiveFeed({ initialData }: LiveFeedProps) {
           </h3>
         </div>
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/logs" className="text-[#4F39F6]">
+          <Link href="/admin/live" className="text-[#4F39F6]">
             <Eye className="h-4 w-4 mr-1" />
             View All
           </Link>
@@ -98,7 +112,7 @@ export function LiveFeed({ initialData }: LiveFeedProps) {
         ) : (
           <div className="divide-y divide-slate-100">
             {scans.slice(0, 5).map((scan) => {
-              const config = getStatusConfig(scan.status);
+              const config = getStatusConfig(scan.status, scan.type);
               return (
                 <div
                   key={scan.id}

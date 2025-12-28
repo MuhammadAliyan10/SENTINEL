@@ -64,14 +64,14 @@ export function LogTable({
   const formatTimestamp = (ts: Date | string) => {
     const date = typeof ts === "string" ? new Date(ts) : ts;
     return date
-      .toLocaleString("en-CA", {
+      .toLocaleString("en-PK", {
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
-        hour: "2-digit",
+        hour: "numeric",
         minute: "2-digit",
         second: "2-digit",
-        hour12: false,
+        hour12: true,
         timeZone: "Asia/Karachi",
       })
       .replace(",", "");

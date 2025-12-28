@@ -97,11 +97,11 @@ Dear ${result.fullName},
 
 Your university access pass has been generated.
 
-🔑 *Login Credentials:*
+ *Login Credentials:*
 • SAP ID: ${result.sapId}
 • Token: *${result.token}*
 
-🔗 *Login Here:*
+ *Login Here:*
 https://sentineluol.vercel.app/login
 
 _Please keep this token secure._`;
@@ -119,14 +119,14 @@ _Please keep this token secure._`;
       <DrawerTrigger asChild>
         <Button
           size="lg"
-          className="w-full h-12 text-lg shadow-lg shadow-primary/20 rounded-md"
+          className="w-full h-11 text-lg  shadow-lg shadow-primary/20 rounded-md"
         >
-          <Plus className="mr-2 h-6 w-6" />
+          <Plus className="mr-1 h-6 w-6" />
           ISSUE NEW PASS
         </Button>
       </DrawerTrigger>
       <DrawerContent className={result ? "min-h-[85vh]" : ""}>
-        <div className="mx-auto w-full max-w-sm">
+        <div className="w-full max-w-sm mx-auto">
           <DrawerHeader>
             <DrawerTitle>Issue New Pass</DrawerTitle>
             <DrawerDescription>

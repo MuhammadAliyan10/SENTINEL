@@ -21,6 +21,20 @@ interface TrafficChartProps {
 }
 
 export function TrafficChart({ data }: TrafficChartProps) {
+  // Convert 24-hour format to 12-hour format with AM/PM
+  const formatHour = (hour: string) => {
+    const hourNum = parseInt(hour.split(":")[0]);
+    const period = hourNum >= 12 ? "PM" : "AM";
+    const hour12 = hourNum === 0 ? 12 : hourNum > 12 ? hourNum - 12 : hourNum;
+    return `${hour12} ${period}`;
+  };
+
+  // Format data with 12-hour time
+  const formattedData = data.map((d) => ({
+    ...d,
+    hourLabel: formatHour(d.hour),
+  }));
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
       {/* Header */}
@@ -40,7 +54,7 @@ export function TrafficChart({ data }: TrafficChartProps) {
       <div className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
-            data={data}
+            data={formattedData}
             margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
           >
             <defs>
@@ -55,7 +69,7 @@ export function TrafficChart({ data }: TrafficChartProps) {
               vertical={false}
             />
             <XAxis
-              dataKey="hour"
+              dataKey="hourLabel"
               axisLine={false}
               tickLine={false}
               tick={{ fill: "#64748B", fontSize: 12 }}
@@ -64,6 +78,7 @@ export function TrafficChart({ data }: TrafficChartProps) {
               axisLine={false}
               tickLine={false}
               tick={{ fill: "#64748B", fontSize: 12 }}
+              allowDecimals={false}
             />
             <Tooltip
               contentStyle={{

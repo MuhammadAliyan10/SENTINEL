@@ -121,6 +121,7 @@ async function getDashboardData() {
         id: true,
         timestamp: true,
         status: true,
+        type: true,
         user: {
           select: {
             fullName: true,
@@ -138,6 +139,7 @@ async function getDashboardData() {
         id: true,
         timestamp: true,
         status: true,
+        type: true,
         gateNumber: true,
         user: {
           select: {

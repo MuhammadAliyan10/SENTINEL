@@ -5,7 +5,11 @@ import { Toaster } from "@/components/ui/sonner";
 import NextTopLoader from "nextjs-toploader";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 
-const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
+const figtree = Figtree({
+  subsets: ["latin"],
+  variable: "--font-figtree",
+  weight: ["300", "400", "500", "600", "700"],
+});
 
 export const metadata: Metadata = {
   title: "Sentinel | University Access Control",
@@ -25,7 +29,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#FFFFFF",
+  themeColor: "#4f39f6",
   colorScheme: "light",
 };
 
@@ -41,7 +45,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body
-        className={`${figtree.variable} font-sans antialiased bg-background text-foreground`}
+        className={`${figtree.className} antialiased bg-background text-foreground`}
         suppressHydrationWarning
       >
         <NextTopLoader

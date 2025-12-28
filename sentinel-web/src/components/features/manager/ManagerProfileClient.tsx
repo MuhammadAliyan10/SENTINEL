@@ -13,6 +13,7 @@ import {
   MapPin,
   GraduationCap,
   HelpCircle,
+  ShieldUser,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,14 @@ export default function ManagerProfileClient({
   stats,
   signOut,
 }: ManagerProfileClientProps) {
+  const displaySemester = user.semester
+    ? (() => {
+        const sem = Number(user.semester);
+        const suffix =
+          sem === 1 ? "st" : sem === 2 ? "nd" : sem === 3 ? "rd" : "th";
+        return `${sem}${suffix}`;
+      })()
+    : "N/A";
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 pb-28">
       {/* Premium Header with Gradient */}
@@ -60,7 +69,7 @@ export default function ManagerProfileClient({
         </motion.div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 -mt-14 space-y-4">
+      <div className="max-w-md mx-auto px-4 -mt-24 space-y-4">
         {/* Profile Card - Premium Design */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -71,7 +80,7 @@ export default function ManagerProfileClient({
             {/* Avatar Section */}
             <div className="flex flex-col items-center pt-6 pb-4 px-6">
               <div className="relative">
-                <Avatar className="h-24 w-24 border-4 border-white shadow-xl ring-4 ring-primary/10">
+                <Avatar className="h-24 w-24 bg-white border-4 border-white shadow-xl ring-4 ring-primary/10">
                   <AvatarImage src={user.profilePhotoUrl || ""} />
                   <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/40 text-primary text-2xl font-bold">
                     {user.fullName?.charAt(0) || "M"}
@@ -80,7 +89,7 @@ export default function ManagerProfileClient({
 
                 {/* Status Badge */}
                 <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full border-3 border-white flex items-center justify-center shadow-lg bg-emerald-500">
-                  <Shield className="h-4 w-4 text-white" />
+                  <ShieldUser className="h-4 w-4 text-white" />
                 </div>
               </div>
 
@@ -88,9 +97,6 @@ export default function ManagerProfileClient({
               <h2 className="mt-4 text-xl font-bold text-gray-900">
                 {user.fullName}
               </h2>
-              <p className="text-gray-500 font-mono text-sm mt-1">
-                {user.sapId}
-              </p>
 
               {/* Role Badge */}
               <div className="flex gap-2 mt-3">
@@ -129,7 +135,7 @@ export default function ManagerProfileClient({
                     </span>
                   </div>
                   <p className="text-lg font-bold text-gray-900">
-                    {user.semester || "N/A"}
+                    {displaySemester}
                   </p>
                 </div>
               </div>
@@ -153,7 +159,7 @@ export default function ManagerProfileClient({
               <p className="text-xs text-gray-500 uppercase font-medium tracking-wider">
                 Cash Collected
               </p>
-              <p className="text-xl font-bold text-emerald-600 mt-1">
+              <p className="text-md font-bold text-emerald-600 mt-1">
                 Rs. {stats.cashCollected.toLocaleString()}
               </p>
             </CardContent>

@@ -64,11 +64,12 @@ export async function searchStudents(query: string): Promise<{
   try {
     await requireSuperAdmin();
 
-    if (!query || query.trim().length < 3) {
+    if (!query || query.trim().length < 4) {
       return {
         success: false,
         students: [],
-        message: "Search query must be at least 3 characters",
+        message:
+          "Search query must be at least 4 characters (since first 3 digits of SAP ID are common)",
       };
     }
 

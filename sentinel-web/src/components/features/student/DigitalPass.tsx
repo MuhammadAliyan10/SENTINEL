@@ -586,13 +586,14 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
             {/* Back content */}
             <div className="h-full flex flex-col items-center p-5 pt-8">
               {/* University Logo */}
-              <div className="w-45 h-15 overflow-hidden mb-4">
+              <div className="w-36 h-15  mb-4">
                 <Image
                   src="/uolLogo.png"
                   alt="University Logo"
-                  width={60}
+                  width={144}
                   height={60}
-                  className="w-full h-full object-cover"
+                  priority
+                  className="object-contain"
                 />
               </div>
 
@@ -673,13 +674,13 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                 }}
               >
                 <div
-                  className="px-8 py-3 border-4 border-emerald-500 rounded-lg"
+                  className="px-8 py-3 border-4 border-emerald-500 bg-gradient-to-r from-emerald-500/40  via-emerald-500/70  to-emerald-500/40 rounded-lg"
                   style={{
                     transform: "rotate(-12deg)",
                   }}
                 >
                   <p
-                    className="text-emerald-500 font-bold text-3xl tracking-widest uppercase"
+                    className="text-white font-bold text-3xl tracking-widest uppercase"
                     style={{
                       textShadow: "0 0 10px rgba(16, 185, 129, 0.3)",
                     }}
@@ -704,13 +705,13 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                 }}
               >
                 <div
-                  className="px-8 py-3 border-4 border-blue-500 rounded-lg"
+                  className="px-8 py-3 border-4 border-blue-500 bg-gradient-to-r from-blue-500/40  via-blue-500/70  to-blue-500/40 rounded-lg"
                   style={{
                     transform: "rotate(12deg)",
                   }}
                 >
                   <p
-                    className="text-blue-500 font-bold text-3xl tracking-widest uppercase"
+                    className="text-white font-bold text-3xl tracking-widest uppercase"
                     style={{
                       textShadow: "0 0 10px rgba(59, 130, 246, 0.3)",
                     }}

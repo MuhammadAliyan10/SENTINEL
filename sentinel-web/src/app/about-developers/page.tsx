@@ -261,7 +261,7 @@ const developers = [
     role: "Team Leader & Senior Software Engineer",
     university: "University of Lahore, Sargodha Campus",
     semester: "Semester 7th • Section A",
-    bio: "Never talk to a woman.",
+    bio: "Never talked to a woman.",
     description:
       "Built the architecture, planned the implementation, and led the entire development process.",
     image: "/developers/Aliyan.jpeg",
@@ -296,7 +296,7 @@ const developers = [
     bio: "He is our coach who got played before.",
     description:
       "Crafted the mobile application with seamless user experience.",
-    image: "/developers/Zeeshan.jpeg",
+    image: "/developers/Zeeshan.png",
     github: "https://github.com/Zeeshier",
     linkedin: "https://www.linkedin.com/in/zeeshier",
     email: "zeeshanwarraich51@gmail.com",
@@ -337,14 +337,14 @@ export default function AboutDevelopersPage() {
       </div>
 
       {/* Header */}
-      <header className="relative bg-linear-to-r from-blue-600 via-blue-700 to-indigo-700 text-white overflow-hidden">
+      <header className="relative bg-primary text-white overflow-hidden">
         <div className="absolute inset-0 bg-grid-white/5" />
         <div className="absolute inset-0 bg-linear-to-b from-transparent to-blue-900/20" />
 
         <div className="relative container mx-auto px-4 py-4">
           <button
             onClick={() => window.history.back()}
-            className="group flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 backdrop-blur-sm transition-all duration-300 border border-white/20"
+            className="group flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300"
           >
             <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
             <span className="text-sm font-medium">Back to Home</span>
@@ -357,7 +357,7 @@ export default function AboutDevelopersPage() {
           }`}
         >
           <div className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 mb-6">
-            <span className="font-semibold text-sm">🏴‍☠️ BOUNTY HUNTERS</span>
+            <span className="font-semibold text-sm">BOUNTY HUNTERS</span>
           </div>
 
           <h1 className="text-4xl md:text-6xl font-bold mb-4 bg-clip-text text-transparent bg-linear-to-r from-white to-blue-100">
@@ -439,18 +439,18 @@ export default function AboutDevelopersPage() {
                     <h2 className="text-xl font-bold text-slate-900 mb-1 group-hover:text-blue-600 transition-colors">
                       {dev.name}
                     </h2>
-                    <p className="text-blue-600 font-semibold text-sm">
+                    <p className="text-primary font-semibold text-sm">
                       {dev.role}
                     </p>
                   </div>
 
                   <div className="space-y-1.5 text-xs text-slate-600">
                     <p className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                      <span className="w-1 h-1 rounded-full bg-blue-600" />
                       {dev.university}
                     </p>
                     <p className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                      <span className="w-1 h-1 rounded-full bg-blue-600" />
                       {dev.semester}
                     </p>
                   </div>
@@ -460,8 +460,7 @@ export default function AboutDevelopersPage() {
                   </p>
 
                   <blockquote className="relative border-l-3 border-blue-400 pl-4 py-2 italic text-slate-600 text-sm bg-blue-50/50 rounded-r-lg">
-                    <Star className="absolute -left-1 -top-1 h-3 w-3 text-blue-400 fill-blue-400" />
-                    "{dev.bio}"
+                    {dev.bio}
                   </blockquote>
 
                   {/* Social Links */}
@@ -499,7 +498,7 @@ export default function AboutDevelopersPage() {
       </section>
 
       {/* About Project Section */}
-      <section className="relative bg-linear-to-br from-blue-600 to-indigo-700 text-white overflow-hidden">
+      <section className="relative bg-primary text-white overflow-hidden">
         <div className="absolute inset-0 bg-grid-white/5" />
         <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent" />
 

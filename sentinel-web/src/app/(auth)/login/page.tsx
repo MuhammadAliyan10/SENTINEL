@@ -41,9 +41,13 @@ function StudentLoginForm() {
   const searchParams = useSearchParams();
   const redirectPath = validateRedirectPath(searchParams.get("redirect"));
 
+  // Read pre-filled credentials from URL query parameters (from WhatsApp share links)
+  const prefillSapId = searchParams.get("sapId") || "";
+  const prefillToken = searchParams.get("token") || "";
+
   const [isLoading, setIsLoading] = useState(false);
-  const [sapId, setSapId] = useState("");
-  const [token, setToken] = useState("");
+  const [sapId, setSapId] = useState(prefillSapId);
+  const [token, setToken] = useState(prefillToken.toUpperCase());
   const [error, setError] = useState<string | null>(null);
   const [sapIdError, setSapIdError] = useState<string | null>(null);
 

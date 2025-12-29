@@ -23,6 +23,47 @@ export default function OnboardingPage() {
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
   const [cardPreview, setCardPreview] = useState<string | null>(null);
 
+  // Auto-formatting state for CNIC and Phone
+  const [cnic, setCnic] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+
+  // Auto-format CNIC: XXXXX-XXXXXXX-X
+  const handleCnicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Remove all non-digits
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 13);
+
+    // Format with dashes
+    let formatted = "";
+    if (digits.length > 0) {
+      formatted = digits.slice(0, 5);
+    }
+    if (digits.length > 5) {
+      formatted += "-" + digits.slice(5, 12);
+    }
+    if (digits.length > 12) {
+      formatted += "-" + digits.slice(12, 13);
+    }
+
+    setCnic(formatted);
+  };
+
+  // Auto-format Phone: 0XXX XXXXXXX
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Remove all non-digits
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 11);
+
+    // Format with space after first 4 digits
+    let formatted = "";
+    if (digits.length > 0) {
+      formatted = digits.slice(0, 4);
+    }
+    if (digits.length > 4) {
+      formatted += " " + digits.slice(4, 11);
+    }
+
+    setPhoneNumber(formatted);
+  };
+
   async function handleImageUpload(
     file: File,
     bucket: "avatars" | "id-cards"
@@ -146,10 +187,12 @@ export default function OnboardingPage() {
                   autoComplete="off"
                   placeholder="12345-1234567-1"
                   required
-                  pattern="\d{5}-\d{7}-\d{1}"
+                  value={cnic}
+                  onChange={handleCnicChange}
+                  inputMode="numeric"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Format: 12345-1234567-1 (Dashes required)
+                  Format: 12345-1234567-1 (Dashes added automatically)
                 </p>
               </div>
 
@@ -162,6 +205,9 @@ export default function OnboardingPage() {
                   autoComplete="off"
                   required
                   type="tel"
+                  value={phoneNumber}
+                  onChange={handlePhoneChange}
+                  inputMode="numeric"
                 />
               </div>
 

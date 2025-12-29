@@ -91,6 +91,9 @@ export function IssuePassForm() {
 
   const handleShare = () => {
     if (!result) return;
+    // Build login URL with pre-filled credentials as query parameters
+    const loginUrl = `https://sentineluol.vercel.app/login?sapId=${result.sapId}&token=${result.token}`;
+
     const message = `🎓 *SENTINEL ACCESS PASS*
 
 Dear ${result.fullName},
@@ -101,8 +104,8 @@ Your university access pass has been generated.
 • SAP ID: ${result.sapId}
 • Token: *${result.token}*
 
- *Login Here:*
-https://sentineluol.vercel.app/login
+ *Click to Login (Auto-Fill):*
+${loginUrl}
 
 _Please keep this token secure._`;
     const url = `https://wa.me/?text=${encodeURIComponent(message)}`;

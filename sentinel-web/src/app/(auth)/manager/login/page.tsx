@@ -92,7 +92,7 @@ function ManagerLoginForm() {
 
           {/* Title */}
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-2xl py-3 font-bold text-foreground">
               Login as Manager
             </h1>
           </div>

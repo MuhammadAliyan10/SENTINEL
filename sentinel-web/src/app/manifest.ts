@@ -12,7 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     icons: [
       {
-        src: "/uolLogo.png",
+        src: "/uol.png",
         sizes: "any",
         type: "image/png",
       },

@@ -7,6 +7,7 @@ import {
   Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
@@ -22,10 +23,12 @@ import Animated, {
 import ResultOverlay from "../../components/ResultOverlay";
 import { verifyQrHybrid, VerifyResponse } from "../../src/lib/api";
 import {
+  supabase,
   getUserBySapId,
   getRecentAccessLog,
   getStudentActivityLogs,
   insertAccessLog,
+  getCachedSession,
   DatabaseError,
 } from "../../src/lib/supabase";
 import { verifyQrSignature, parseQrData } from "../../src/utils/security";
@@ -57,8 +60,10 @@ export default function ScannerScreen() {
   const [mode, setMode] = useState<ScanMode>("ENTRY");
   const [isScanning, setIsScanning] = useState(true);
   const [flashEnabled, setFlashEnabled] = useState(false);
+
   const [showResult, setShowResult] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [isGuardActive, setIsGuardActive] = useState(true); // Default to true while checking
 
   // Ref for synchronous scan lock (prevents race conditions)
   const scanLockRef = useRef(false);
@@ -233,7 +238,10 @@ export default function ScannerScreen() {
     setScanResult(null);
     setTimeout(() => {
       scanLockRef.current = false; // Reset lock for next scan
-      setIsScanning(true);
+
+      if (isGuardActive) {
+        setIsScanning(true);
+      }
     }, 200);
   };
 
@@ -370,6 +378,56 @@ export default function ScannerScreen() {
             Grant Access
           </Text>
         </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isGuardActive) {
+    return (
+      <SafeAreaView className="flex-1 bg-primary">
+        <StatusBar style="light" />
+
+        {/* Standard App Header */}
+        <View className="px-4 py-4 bg-black-100 border-b border-black-200">
+          <View>
+            <Text
+              className="text-white text-2xl font-bold"
+              style={{ fontFamily: "Figtree_800ExtraBold" }}
+            >
+              Sentinel Guard
+            </Text>
+            <Text
+              className="text-gray-100 text-sm"
+              style={{ fontFamily: "Figtree_400Regular" }}
+            >
+              System Status
+            </Text>
+          </View>
+        </View>
+
+        {/* Main Content */}
+        <View className="flex-1 items-center justify-center px-6">
+          {/* Icon with subtle background */}
+          <View className="w-24 h-24 bg-red-500/10 rounded-full items-center justify-center mb-6 border border-red-500/20">
+            <Ionicons name="ban" size={48} color="#EF4444" />
+          </View>
+
+          <Text
+            className="text-white text-2xl font-bold mb-3 text-center"
+            style={{ fontFamily: "Figtree_700Bold" }}
+          >
+            Account Deactivated
+          </Text>
+
+          <Text
+            className="text-gray-100 text-center text-base leading-6 px-4"
+            style={{ fontFamily: "Figtree_400Regular" }}
+          >
+            Your access has been restricted by the administrator.
+            {"\n"}
+            Please contact support to restore access.
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }

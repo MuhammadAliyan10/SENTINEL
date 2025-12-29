@@ -29,6 +29,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -40,6 +41,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { cn } from "@/lib/utils";
 
 interface AdminUser {
   id: string;
@@ -92,6 +95,7 @@ const navItems = [
 
 export function AdminSidebar({ user }: AdminSidebarProps) {
   const pathname = usePathname();
+  const { state, isMobile } = useSidebar();
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -111,8 +115,8 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-card">
-      {/* Header with Logo */}
-      <SidebarHeader className="h-16 flex items-center justify-center border-b border-border/50 px-4">
+      {/* Header with Logo - FIXED: Uses group-data classes for proper collapsed styling */}
+      <SidebarHeader className="h-16 flex items-center justify-center border-b border-border/50 px-4 group-data-[collapsible=icon]:px-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -120,13 +124,36 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
               size="lg"
               className="flex items-center justify-center hover:bg-transparent"
             >
-              <Link href="/admin">
-                <div className="flex h-32 w-32 items-center justify-center rounded-xl">
-                  <img
-                    src="/Logo.png"
-                    alt="Sentinel"
-                    className="h-full w-full object-contain"
-                  />
+              <Link
+                href="/admin"
+                className="flex items-center justify-center w-full"
+              >
+                {/*
+                  FIXED: Dynamic Logo Logic with Proper Collapsed Sizing
+                  - Expanded/Mobile: /Logo.png (128x128 container)
+                  - Collapsed (Desktop): /clplogo-small.png (20x20 to fit 48px sidebar)
+                  - Uses group-data-[collapsible=icon] instead of state checks
+                */}
+                <div className="flex items-center justify-center rounded-xl h-32 w-32 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:w-10 transition-all duration-200">
+                  {isMobile || state === "expanded" ? (
+                    <Image
+                      src="/Logo.png"
+                      alt="Sentinel"
+                      width={128}
+                      height={128}
+                      className="h-full w-full object-contain"
+                      priority
+                    />
+                  ) : (
+                    <Image
+                      src="/clplogo-small.png"
+                      alt="Sentinel"
+                      width={20}
+                      height={20}
+                      className="object-contain"
+                      priority
+                    />
+                  )}
                 </div>
               </Link>
             </SidebarMenuButton>

@@ -27,13 +27,14 @@ export function ManagerTopNav() {
   return (
     <header className="bg-white border-b border-border h-16 px-6 flex items-center justify-between">
       <div className="flex items-center gap-8">
-        <div className="flex items-center gap-2 font-bold text-xl text-primary">
+        <div className="relative h-10 w-10">
           <Image
             src="/Logo.png"
             alt="UOL Logo"
-            width={32}
-            height={32}
-            className="h-20 w-20 object-contain"
+            fill
+            className="object-contain"
+            sizes="40px"
+            priority
           />
         </div>
         <nav className="hidden md:flex gap-6">

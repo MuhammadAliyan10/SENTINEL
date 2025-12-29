@@ -116,21 +116,19 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
+              asChild
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-transparent"
+              className="flex items-center justify-center hover:bg-transparent"
             >
-              <div className="flex aspect-square size-10 items-center justify-center rounded-xl">
-                <img
-                  src="/Logo.png"
-                  alt="Sentinel"
-                  className="size-8 object-contain"
-                />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate font-bold text-lg tracking-tight text-foreground">
-                  Sentinel
-                </span>
-              </div>
+              <Link href="/admin">
+                <div className="flex h-32 w-32 items-center justify-center rounded-xl">
+                  <img
+                    src="/Logo.png"
+                    alt="Sentinel"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

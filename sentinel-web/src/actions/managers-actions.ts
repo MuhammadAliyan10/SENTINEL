@@ -667,3 +667,163 @@ export async function deleteManager(managerId: string): Promise<ActionResult> {
     };
   }
 }
+
+// ============================================
+// HARD DELETE MANAGER (WITH CASCADE)
+// ============================================
+// This function allows permanent deletion of managers along with their audit logs.
+// USE WITH EXTREME CAUTION - This action is irreversible!
+
+export interface HardDeleteResult extends ActionResult {
+  auditLogCount?: number;
+}
+
+export async function hardDeleteManager(
+  managerId: string
+): Promise<HardDeleteResult> {
+  try {
+    const admin = await requireSuperAdmin();
+
+    // ================================================================
+    // STEP 1: VERIFY TARGET IS A MANAGER & GET COMPLETE INFO
+    // ================================================================
+    const manager = await prisma.user.findUnique({
+      where: { id: managerId },
+      select: {
+        role: true,
+        fullName: true,
+        sapId: true,
+        _count: {
+          select: {
+            createdUsers: true, // Students they registered
+            auditLogs: true, // Audit logs where they are the performer
+          },
+        },
+      },
+    });
+
+    if (!manager || !["CR", "GR"].includes(manager.role)) {
+      return {
+        success: false,
+        message: "Manager not found",
+      };
+    }
+
+    // ================================================================
+    // STEP 2: CRITICAL BUSINESS RULE - BLOCK IF THEY HAVE GENERATED PASSES
+    // ================================================================
+    // Managers with generated passes (created students) CANNOT be deleted
+    // to preserve ticket validity and financial audit trails.
+    if (manager._count.createdUsers > 0) {
+      return {
+        success: false,
+        message: `This manager has ${manager._count.createdUsers} generated passes and cannot be deleted. Please transfer responsibility or use the "Freeze" option instead.`,
+        auditLogCount: manager._count.auditLogs,
+      };
+    }
+
+    const auditLogCount = manager._count.auditLogs;
+
+    // ================================================================
+    // STEP 3: PRISMA TRANSACTION - CASCADE DELETE
+    // ================================================================
+    // Use $transaction to ensure atomicity:
+    // - Either BOTH the audit logs AND the manager are deleted
+    // - OR neither are deleted (rollback on error)
+    //
+    // ORDER MATTERS:
+    // 1. Delete audit logs FIRST (they reference the manager via performerId FK)
+    // 2. Delete manager SECOND (after dependencies are cleared)
+
+    await prisma.$transaction(async (tx) => {
+      // Step 3A: Delete all audit logs where this manager is the performer
+      await tx.auditLog.deleteMany({
+        where: {
+          performerId: managerId,
+        },
+      });
+
+      // Step 3B: Delete the manager record
+      await tx.user.delete({
+        where: { id: managerId },
+      });
+    });
+
+    // ================================================================
+    // STEP 4: DELETE FROM SUPABASE AUTH
+    // ================================================================
+    // Only attempt Auth deletion after Prisma transaction succeeds
+    const supabaseAdmin = createAdminClient();
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
+      managerId
+    );
+
+    if (authError) {
+      console.error("Supabase Auth Delete Error:", authError);
+      console.warn(
+        `Manager ${managerId} deleted from database but Auth deletion failed. Manual cleanup may be required.`
+      );
+    }
+
+    // ================================================================
+    // STEP 5: LOG THE HARD DELETE ACTION
+    // ================================================================
+    await prisma.auditLog.create({
+      data: {
+        performerId: admin.id,
+        action: "HARD_DELETE_MANAGER",
+        targetId: managerId,
+        details: `Hard deleted ${manager.role} account: ${
+          manager.fullName || manager.sapId
+        } (removed ${auditLogCount} audit logs)`,
+      },
+    });
+
+    // ================================================================
+    // STEP 6: REVALIDATE CACHES
+    // ================================================================
+    revalidatePath("/admin/managers");
+    revalidateTag(CACHE_TAGS.managers, "max");
+
+    return {
+      success: true,
+      message: `Manager and ${auditLogCount} audit log(s) permanently deleted`,
+      auditLogCount,
+    };
+  } catch (error) {
+    console.error("Hard Delete Manager Error:", error);
+
+    // ENHANCED ERROR HANDLING
+    if (error instanceof Error) {
+      // Check for transaction errors
+      if (error.message.includes("Transaction")) {
+        return {
+          success: false,
+          message: "Transaction failed. No data was deleted. Please try again.",
+        };
+      }
+
+      // Check for foreign key constraint errors (shouldn't happen due to transaction, but safety check)
+      if (
+        error.message.includes("Foreign key constraint") ||
+        error.message.includes("fkey")
+      ) {
+        return {
+          success: false,
+          message:
+            "Cannot delete manager due to existing dependencies. Please contact support.",
+        };
+      }
+
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+
+    return {
+      success: false,
+      message: "Failed to hard delete manager",
+    };
+  }
+}

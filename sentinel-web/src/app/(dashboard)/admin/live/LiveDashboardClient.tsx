@@ -13,6 +13,10 @@ import {
   RotateCcw,
   Radio,
   Zap,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { EntryStatus } from "@/types/database";
@@ -105,6 +109,48 @@ export function LiveDashboardClient() {
   const [lastScanTime, setLastScanTime] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
+
+  // ========================================
+  // NEW: Client-Side Search & Pagination State
+  // ========================================
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // NEW: Debounce search query with 300ms delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      // Reset to page 1 when search changes
+      setCurrentPage(1);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // NEW: Client-side filtering logic (searches Student Name and SAP ID)
+  const filteredEntries = entries.filter((entry) => {
+    if (!debouncedSearchQuery.trim()) return true;
+
+    const query = debouncedSearchQuery.toLowerCase();
+    const matchesName = entry.full_name.toLowerCase().includes(query);
+    const matchesSapId = entry.sap_id.toLowerCase().includes(query);
+
+    return matchesName || matchesSapId;
+  });
+
+  // NEW: Pagination logic
+  const totalPages = Math.ceil(filteredEntries.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedEntries = filteredEntries.slice(startIndex, endIndex);
+
+  // NEW: Pagination handlers
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+  // ========================================
 
   useEffect(() => {
     const supabase = createClient();
@@ -329,76 +375,182 @@ export function LiveDashboardClient() {
             <CardTitle>Live Entry Feed</CardTitle>
           </div>
           <Badge variant="outline" className="animate-pulse">
-            {entries.length} recent entries
+            {filteredEntries.length} {searchQuery ? "filtered" : "recent"}{" "}
+            entries
           </Badge>
         </CardHeader>
         <CardContent>
-          <div
-            ref={feedRef}
-            className="space-y-3 max-h-[500px] overflow-y-auto"
-          >
+          {/* NEW: Search Input with Debounce */}
+          <div className="mb-4 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search by Student Name or SAP ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* NEW: Paginated Entry List (replaced old static list) */}
+          <div ref={feedRef} className="space-y-3 min-h-[400px]">
             {entries.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p>Waiting for scans...</p>
               </div>
-            ) : (
-              entries.map((entry, index) => (
-                <div
-                  key={entry.id}
-                  className={`
-                    flex items-center justify-between p-4 rounded-lg border border-border
-                    transition-all duration-300
-                    ${
-                      index === 0
-                        ? "bg-primary/5 border-primary/20 animate-pulse"
-                        : "hover:bg-slate-50"
-                    }
-                  `}
+            ) : filteredEntries.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Search className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>No entries found matching "{searchQuery}"</p>
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="mt-2 text-sm text-primary hover:underline"
                 >
-                  <div className="flex items-center gap-4">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage src={entry.photo_url || undefined} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
-                        {getInitials(entry.full_name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {entry.full_name}
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <code className="font-mono bg-slate-100 px-1 rounded">
-                          {entry.sap_id}
-                        </code>
-                        <span>•</span>
-                        <span>{entry.location}</span>
-                        {/* NEW: Display Guard Name */}
-                        {entry.guard_name && (
-                          <>
-                            <span>•</span>
-                            <span className="text-xs text-primary/70">
-                              Guard: {entry.guard_name}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <StatusBadge status={entry.status} type={entry.type} />
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(entry.scanned_at).toLocaleTimeString("en-US", {
-                        hour: "numeric",
-                        minute: "2-digit",
-                        hour12: true,
-                        timeZone: "Asia/Karachi",
-                      })}
-                    </span>
-                  </div>
+                  Clear search
+                </button>
+              </div>
+            ) : (
+              /* OLD RENDERING LOGIC - COMMENTED OUT
+              entries.map((entry, index) => (
+                <div key={entry.id} ...>
+                  ...
                 </div>
               ))
+              */
+              /* NEW: Render paginated and filtered entries */
+              paginatedEntries.map((entry, index) => {
+                // Check if this entry is the most recent one in the full list
+                const isLatest = entries[0]?.id === entry.id;
+                return (
+                  <div
+                    key={entry.id}
+                    className={`
+                      flex items-center justify-between p-4 rounded-lg border border-border
+                      transition-all duration-300
+                      ${
+                        isLatest
+                          ? "bg-primary/5 border-primary/20 animate-pulse"
+                          : "hover:bg-slate-50"
+                      }
+                    `}
+                  >
+                    <div className="flex items-center gap-4">
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={entry.photo_url || undefined} />
+                        <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                          {getInitials(entry.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {entry.full_name}
+                        </p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <code className="font-mono bg-slate-100 px-1 rounded">
+                            {entry.sap_id}
+                          </code>
+                          <span>•</span>
+                          <span>{entry.location}</span>
+                          {entry.guard_name && (
+                            <>
+                              <span>•</span>
+                              <span className="text-xs text-primary/70">
+                                Guard: {entry.guard_name}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <StatusBadge status={entry.status} type={entry.type} />
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(entry.scanned_at).toLocaleTimeString(
+                          "en-US",
+                          {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                            timeZone: "Asia/Karachi",
+                          }
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
+
+          {/* NEW: Pagination Controls */}
+          {filteredEntries.length > 0 && (
+            <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-
+                {Math.min(endIndex, filteredEntries.length)} of{" "}
+                {filteredEntries.length} entries
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 border border-border rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      // Show first, last, current, and pages around current
+                      return (
+                        page === 1 ||
+                        page === totalPages ||
+                        Math.abs(page - currentPage) <= 1
+                      );
+                    })
+                    .map((page, index, array) => (
+                      <div key={page} className="flex items-center gap-1">
+                        {index > 0 && array[index - 1] !== page - 1 && (
+                          <span className="text-muted-foreground px-1">
+                            ...
+                          </span>
+                        )}
+                        <button
+                          onClick={() => goToPage(page)}
+                          className={`px-3 py-1.5 border rounded-md transition-colors ${
+                            currentPage === page
+                              ? "bg-primary text-white border-primary"
+                              : "border-border hover:bg-slate-50"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </div>
+                    ))}
+                </div>
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 border border-border rounded-md hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                  aria-label="Next page"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

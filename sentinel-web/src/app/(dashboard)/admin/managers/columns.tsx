@@ -12,7 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Eye, Snowflake, Flame, Trash2 } from "lucide-react";
+import {
+  MoreHorizontal,
+  Eye,
+  Snowflake,
+  Flame,
+  Trash2,
+  Skull,
+} from "lucide-react";
 
 // ============================================
 // TYPES
@@ -35,6 +42,7 @@ export interface ManagerActions {
   onView: (manager: ManagerRow) => void;
   onToggleActive: (manager: ManagerRow) => void;
   onDelete: (manager: ManagerRow) => void;
+  onHardDelete: (manager: ManagerRow) => void; // NEW: Hard delete with cascade
 }
 
 // ============================================
@@ -212,6 +220,14 @@ export function getManagerColumns(
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
+                </DropdownMenuItem>
+                {/* NEW: Hard Delete Option (Cascade) */}
+                <DropdownMenuItem
+                  onClick={() => actions.onHardDelete(manager)}
+                  className="text-red-600 focus:text-red-600 focus:bg-red-50 font-semibold"
+                >
+                  <Skull className="mr-2 h-4 w-4" />
+                  Hard Delete (⚠️ Permanent)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

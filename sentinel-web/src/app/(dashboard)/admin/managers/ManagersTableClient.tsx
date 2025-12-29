@@ -9,7 +9,11 @@ import {
   type ManagerRow,
   type ManagerActions,
 } from "./columns";
-import { toggleManagerActive, deleteManager } from "@/actions/managers-actions";
+import {
+  toggleManagerActive,
+  deleteManager,
+  hardDeleteManager,
+} from "@/actions/managers-actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +57,12 @@ export function ManagersTableClient({
   const [managerToDelete, setManagerToDelete] = useState<ManagerRow | null>(
     null
   );
+
+  // NEW: Hard Delete dialog state
+  const [hardDeleteDialogOpen, setHardDeleteDialogOpen] = useState(false);
+  const [managerToHardDelete, setManagerToHardDelete] =
+    useState<ManagerRow | null>(null);
+  const [auditLogCount, setAuditLogCount] = useState(0);
 
   // Handle pagination changes - update URL
   const handlePaginationChange = useCallback(
@@ -117,14 +127,40 @@ export function ManagersTableClient({
     });
   }, [managerToDelete, router]);
 
+  // NEW: Hard Delete handler with cascade
+  const handleHardDelete = useCallback((manager: ManagerRow) => {
+    setManagerToHardDelete(manager);
+    // For now, we'll set a placeholder count (the actual count will be fetched in the action)
+    // In a real scenario, you might fetch this beforehand for better UX
+    setAuditLogCount(0); // Will be updated by the server response if needed
+    setHardDeleteDialogOpen(true);
+  }, []);
+
+  const confirmHardDelete = useCallback(() => {
+    if (!managerToHardDelete) return;
+
+    startTransition(async () => {
+      const result = await hardDeleteManager(managerToHardDelete.id);
+      if (result.success) {
+        toast.success(result.message);
+        router.refresh();
+      } else {
+        toast.error(result.message);
+      }
+      setHardDeleteDialogOpen(false);
+      setManagerToHardDelete(null);
+    });
+  }, [managerToHardDelete, router]);
+
   // Column actions
   const actions: ManagerActions = useMemo(
     () => ({
       onView: handleView,
       onToggleActive: handleToggleActive,
       onDelete: handleDelete,
+      onHardDelete: handleHardDelete, // NEW: Hard delete action
     }),
-    [handleView, handleToggleActive, handleDelete]
+    [handleView, handleToggleActive, handleDelete, handleHardDelete]
   );
 
   // Get columns with actions
@@ -171,6 +207,75 @@ export function ManagersTableClient({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* NEW: Hard Delete Confirmation Dialog */}
+      <AlertDialog
+        open={hardDeleteDialogOpen}
+        onOpenChange={setHardDeleteDialogOpen}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600 flex items-center gap-2">
+              <span className="text-2xl">⚠️</span> Hard Delete Manager
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p className="font-semibold text-foreground">
+                This action is PERMANENT and cannot be undone.
+              </p>
+              <p>
+                You are about to delete{" "}
+                <strong className="text-foreground">
+                  {managerToHardDelete?.fullName || managerToHardDelete?.sapId}
+                </strong>
+                .
+              </p>
+
+              {/* Show different message based on whether they have generated passes */}
+              {managerToHardDelete && managerToHardDelete.studentsCount > 0 ? (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                  <p className="text-red-700 font-semibold">✖ Cannot Delete</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    This manager has {managerToHardDelete.studentsCount}{" "}
+                    generated passes. Deletion is blocked to preserve ticket
+                    validity and financial audit trails.
+                  </p>
+                  <p className="text-red-600 text-sm mt-2">
+                    Please use the "Freeze" option instead.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                  <p className="text-amber-800 font-semibold">
+                    This will also delete:
+                  </p>
+                  <ul className="text-amber-700 text-sm mt-1 space-y-1">
+                    <li>
+                      • All audit logs where this manager is the performer
+                    </li>
+                    <li>• The manager's account from the system</li>
+                    <li>• The manager's authentication credentials</li>
+                  </ul>
+                  <p className="text-amber-800 font-semibold mt-3">
+                    Are you absolutely sure?
+                  </p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmHardDelete}
+              disabled={
+                isPending || (managerToHardDelete?.studentsCount ?? 0) > 0
+              }
+              className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-600"
+            >
+              {isPending ? "Deleting..." : "Yes, Hard Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

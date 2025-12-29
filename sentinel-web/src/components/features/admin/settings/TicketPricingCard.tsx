@@ -76,15 +76,15 @@ export function TicketPricingCard() {
             <Input
               id="price"
               type="number"
-              placeholder="2000"
+              placeholder={price || "Enter price"}
               className="pl-10"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
             />
           </div>
           <p className="text-xs text-slate-500">
-            Default is Rs. 2000. Changing this will update the &quot;Cash
-            Liability&quot; for all managers immediately.
+            Current price is Rs. {price}. Changing this will update the
+            &quot;Cash Liability&quot; for all managers immediately.
           </p>
         </div>
         <Button onClick={handleSave} disabled={isPending}>

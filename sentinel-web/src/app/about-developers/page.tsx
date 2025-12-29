@@ -18,7 +18,7 @@ import {
 const developers = [
   {
     name: "Muhammad Aliyan Nadeem",
-    role: "Team Leader & Senior Developer",
+    role: "Team Leader & Senior Software Engineer",
     university: "University of Lahore, Sargodha Campus",
     semester: "Semester 7th • Section A",
     bio: "Never talk to a women.",
@@ -33,7 +33,7 @@ const developers = [
   },
   {
     name: "Muhammad Hashir Abdullah",
-    role: "Lead Web Developer",
+    role: "Lead Web Software Engineer",
     university: "University of Lahore, Sargodha Campus",
     semester: "Semester 7th • Section A",
     bio: "Never rejected in his entire life.",
@@ -41,15 +41,14 @@ const developers = [
       "Spearheaded the web application development with cutting-edge technologies.",
     image: "/developers/Hashir.jpeg",
     github: "https://github.com/MHashirAbdullah",
-    linkedin: "https://www.linkedin.com/in/muhammad-aliyan-1900a7275/",
-
+    linkedin: "https://www.linkedin.com/in/muhammad-hashir-abdullah-2b7271240",
     email: "hashirabdullah46@gmail.com",
     icon: Code2,
     isLeader: false,
   },
   {
     name: "Zeeshan Ahmad",
-    role: "Lead App Developer",
+    role: "Lead App Software Engineer",
     university: "University of Lahore, Sargodha Campus",
     semester: "Semester 7th • Section A",
     bio: "He is our coach who got played before.",
@@ -57,7 +56,7 @@ const developers = [
       "Crafted the mobile application with seamless user experience.",
     image: "/developers/Zeeshan.jpeg",
     github: "https://github.com/Zeeshier",
-    linkedin: "https://www.linkedin.com/in/muhammad-aliyan-1900a7275/",
+    linkedin: "https://www.linkedin.com/in/zeeshier",
 
     email: "zeeshanwarraich51@gmail.com",
     icon: Smartphone,
@@ -88,7 +87,7 @@ export default function AboutDevelopersPage() {
             <span className="font-semibold">🏴‍☠️ Bounty Hunters</span>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-2">
-            Meet the Developers
+            Meet the Software Engineers
           </h1>
           <p className="text-white/80 text-lg">
             The talented team of CS students who brought SENTINEL to life

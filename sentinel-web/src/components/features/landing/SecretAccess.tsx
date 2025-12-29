@@ -20,8 +20,8 @@ export function SecretAccess() {
           <Image
             src="/uolLogo.png"
             alt="University Logo"
-            width={160}
-            height={90}
+            width={280}
+            height={150}
             priority
           />
         </div>

@@ -690,6 +690,12 @@ The SENTINEL Guard mobile application provides security personnel with a reliabl
 
 By following this guide, security personnel can confidently operate the scanning system while understanding the protective measures that prevent fraud and ensure accurate attendance tracking.
 
+## To build this shi
+
+```shell
+eas build -p android --profile preview --clear-cache
+```
+
 ---
 
 <div align="center">

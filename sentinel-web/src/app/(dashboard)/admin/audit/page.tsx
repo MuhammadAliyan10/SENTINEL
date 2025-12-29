@@ -49,7 +49,7 @@ async function getAuditData(page: number) {
   const managerRoles: UserRole[] = [UserRole.CR, UserRole.GR];
 
   // Parallel queries: paginated list + counts
-  const [managers, total, activeCount, frozenCount, studentAggregates] =
+  const [managers, total, crCount, grCount, studentAggregates] =
     await prisma.$transaction([
       // Paginated managers
       prisma.user.findMany({
@@ -74,13 +74,13 @@ async function getAuditData(page: number) {
       prisma.user.count({
         where: { role: { in: managerRoles } },
       }),
-      // Active managers count
+      // CR count
       prisma.user.count({
-        where: { role: { in: managerRoles }, isActive: true },
+        where: { role: "CR" },
       }),
-      // Frozen managers count
+      // GR count
       prisma.user.count({
-        where: { role: { in: managerRoles }, isActive: false },
+        where: { role: "GR" },
       }),
       // Student count
       prisma.user.aggregate({
@@ -94,9 +94,7 @@ async function getAuditData(page: number) {
   // Use dynamic ticket price instead of hardcoded 2000
   const ticketPrice = await getTicketPrice();
   const totalCash = totalStudents * ticketPrice;
-  const activeManagers = activeCount;
-  const frozenManagers = frozenCount;
-  const totalManagers = activeManagers + frozenManagers;
+  const totalManagers = crCount + grCount;
 
   const pageCount = Math.ceil(total / PAGE_SIZE);
 
@@ -107,7 +105,8 @@ async function getAuditData(page: number) {
     totalStudents,
     totalCash,
     ticketPrice,
-    activeManagers,
+    crCount,
+    grCount,
     totalManagers,
   };
 }
@@ -122,7 +121,8 @@ export default async function AuditPage({ searchParams }: PageProps) {
     totalStudents,
     totalCash,
     ticketPrice,
-    activeManagers,
+    crCount,
+    grCount,
     totalManagers,
   } = await getAuditData(page);
 
@@ -153,7 +153,8 @@ export default async function AuditPage({ searchParams }: PageProps) {
             ticketPrice,
             totalStudents,
             totalCash,
-            activeManagers,
+            crCount,
+            grCount,
             totalManagers,
           }}
         />
@@ -164,14 +165,15 @@ export default async function AuditPage({ searchParams }: PageProps) {
         <Card className="bg-white border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Managers
+              Total Managers
             </CardTitle>
             <FileSearch className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {activeManagers}/{totalManagers}
-            </div>
+            <div className="text-2xl font-bold">{totalManagers}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {crCount} CR, {grCount} GR
+            </p>
           </CardContent>
         </Card>
 

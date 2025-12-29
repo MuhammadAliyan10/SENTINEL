@@ -314,7 +314,8 @@ export interface AuditReportData {
   ticketPrice: number;
   totalStudents: number;
   totalCash: number;
-  activeManagers: number;
+  crCount: number;
+  grCount: number;
   totalManagers: number;
 }
 
@@ -379,9 +380,13 @@ export function generateAuditReportPDF(data: AuditReportData): void {
 
   // Left column - Managers
   doc.setFont("helvetica", "bold");
-  doc.text("Active Managers:", leftCol, y);
+  doc.text("Total Managers:", leftCol, y);
   doc.setFont("helvetica", "normal");
-  doc.text(`${data.activeManagers} / ${data.totalManagers}`, leftCol + 35, y);
+  doc.text(
+    `${data.totalManagers} (${data.crCount} CR, ${data.grCount} GR)`,
+    leftCol + 35,
+    y
+  );
 
   // Right column - Date
   doc.setFont("helvetica", "bold");
@@ -542,7 +547,7 @@ export function generateAuditReportPDF(data: AuditReportData): void {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(
-      `${data.activeManagers} Active / ${data.totalManagers} Total Managers`,
+      `${data.totalManagers} Total Managers (${data.crCount} CR, ${data.grCount} GR)`,
       20,
       totalY + 18
     );

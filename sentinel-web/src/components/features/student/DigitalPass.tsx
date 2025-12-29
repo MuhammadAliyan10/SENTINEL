@@ -533,10 +533,10 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
 
             {/* Primary color header */}
             <div className="bg-primary pt-8 pb-4 px-2 text-center">
-              <p className="text-white/80 font-mono text-[10px] tracking-[0.15em] uppercase font-medium">
+              <p className="text-white/80 text-[10px] tracking-[0.15em] uppercase font-medium">
                 Department of Computer Science
               </p>
-              <h1 className="text-white font-mono text-sm font-bold mt-1 tracking-tight">
+              <h1 className="text-white text-sm font-bold mt-1 tracking-tight">
                 ANNUAL DINNER 2026
               </h1>
             </div>
@@ -550,7 +550,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
             )}
 
             {/* QR Code Section */}
-            <div className="flex-1 flex flex-col items-center justify-center mt-5 p-6">
+            <div className="flex-1 flex flex-col items-center justify-center mt-4 p-6">
               <div
                 className={`p-4 bg-white rounded-2xl border-2 ${
                   isOffline
@@ -569,6 +569,17 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                   includeMargin={false}
                 />
               </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-primary to-primary/90 py-2.5 px-4">
+              <p className="text-white/70 text-[8px] text-center tracking-wide">
+                This application is developed by
+                <a
+                  className="text-white pl-[1px] font-semibold underline! transition-all"
+                  href="/about-developers"
+                >
+                  Bounty Hunters
+                </a>
+              </p>
             </div>
           </div>
 
@@ -655,8 +666,8 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
             {/* Warning Footer */}
             <div className="absolute bottom-0 left-0 right-0 bg-red-600 py-2 px-3">
               <p className="text-white text-[9px] text-center font-medium leading-tight">
-                ⚠️ Sharing your pass or attempting to bypass security will
-                result in rustication
+                Sharing your pass or attempting to bypass security will result
+                in rustication
               </p>
             </div>
 

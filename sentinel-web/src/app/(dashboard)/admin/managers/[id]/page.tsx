@@ -56,11 +56,16 @@ function TableSkeleton() {
 interface StatsCardsProps {
   studentsCount: number;
   cashCollected: number;
+  ticketPrice: number;
 }
 
-function StatsCards({ studentsCount, cashCollected }: StatsCardsProps) {
+function StatsCards({
+  studentsCount,
+  cashCollected,
+  ticketPrice,
+}: StatsCardsProps) {
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
@@ -98,24 +103,12 @@ function StatsCards({ studentsCount, cashCollected }: StatsCardsProps) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Per Student</p>
-              <p className="text-2xl font-bold">Rs. 2,000</p>
+              <p className="text-2xl font-bold">
+                Rs. {ticketPrice.toLocaleString()}
+              </p>
             </div>
             <div className="p-3 rounded-xl bg-amber-100 text-amber-600">
               <UserCheck className="h-5 w-5" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Target</p>
-              <p className="text-2xl font-bold">50</p>
-            </div>
-            <div className="p-3 rounded-xl bg-blue-100 text-blue-600">
-              <FileText className="h-5 w-5" />
             </div>
           </div>
         </CardContent>
@@ -125,8 +118,10 @@ function StatsCards({ studentsCount, cashCollected }: StatsCardsProps) {
 }
 
 // ============================================
-// STUDENTS TABLE
+// STUDENTS TABLE (Server Component Wrapper)
 // ============================================
+
+import { StudentsTableClient, AuditLogsTableClient } from "./ManagerTables";
 
 interface StudentsTableProps {
   managerId: string;
@@ -135,50 +130,22 @@ interface StudentsTableProps {
 async function StudentsTable({ managerId }: StudentsTableProps) {
   const stats = await getManagerStats(managerId);
 
-  if (!stats || stats.recentStudents.length === 0) {
+  if (!stats) {
     return (
       <Card>
         <CardContent className="p-8 text-center text-muted-foreground">
           <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>No students registered yet</p>
+          <p>Failed to load students</p>
         </CardContent>
       </Card>
     );
   }
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Registered Students</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>SAP ID</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Registered On</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {stats.recentStudents.map((student) => (
-              <TableRow key={student.id}>
-                <TableCell className="font-mono">{student.sapId}</TableCell>
-                <TableCell>{student.fullName || "—"}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {new Date(student.createdAt).toLocaleDateString()}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
+  return <StudentsTableClient students={stats.recentStudents} />;
 }
 
 // ============================================
-// AUDIT LOGS TABLE
+// AUDIT LOGS TABLE (Server Component Wrapper)
 // ============================================
 
 interface AuditLogsTableProps {
@@ -188,50 +155,18 @@ interface AuditLogsTableProps {
 async function AuditLogsTable({ managerId }: AuditLogsTableProps) {
   const stats = await getManagerStats(managerId);
 
-  if (!stats || stats.auditLogs.length === 0) {
+  if (!stats) {
     return (
       <Card>
         <CardContent className="p-8 text-center text-muted-foreground">
           <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>No audit logs found</p>
+          <p>Failed to load audit logs</p>
         </CardContent>
       </Card>
     );
   }
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Activity Logs</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Action</TableHead>
-              <TableHead>Details</TableHead>
-              <TableHead>Time</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {stats.auditLogs.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell>
-                  <Badge variant="outline">{log.action}</Badge>
-                </TableCell>
-                <TableCell className="max-w-md truncate">
-                  {log.details || "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {new Date(log.timestamp).toLocaleString()}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
+  return <AuditLogsTableClient logs={stats.auditLogs} />;
 }
 
 // ============================================
@@ -288,6 +223,7 @@ export default async function ManagerDetailPage({ params }: PageProps) {
       <StatsCards
         studentsCount={manager.studentsCount}
         cashCollected={manager.cashCollected}
+        ticketPrice={manager.ticketPrice}
       />
 
       {/* Tabs */}

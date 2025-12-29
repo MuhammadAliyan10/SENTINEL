@@ -95,7 +95,7 @@ export async function searchStudents(query: string): Promise<{
 
     const students = await prisma.user.findMany({
       where,
-      take: 20,
+      take: 30, // Reasonable limit for search results
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -367,7 +367,7 @@ export interface StudentDirectoryRow {
 export async function getAllStudents(
   page: number = 1,
   limit: number = 20,
-  filter: "all" | "paid" | "unpaid" = "all"
+  managerSearch: string = ""
 ): Promise<{
   data: StudentDirectoryRow[];
   total: number;
@@ -382,8 +382,12 @@ export async function getAllStudents(
   const skip = (safePage - 1) * safeLimit;
   const where: any = { role: "STUDENT" };
 
-  if (filter === "paid") where.isPaid = true;
-  if (filter === "unpaid") where.isPaid = false;
+  // Filter by manager name if provided
+  if (managerSearch && managerSearch.trim().length > 0) {
+    where.createdBy = {
+      fullName: { contains: managerSearch.trim(), mode: "insensitive" },
+    };
+  }
 
   const [students, total] = await prisma.$transaction([
     prisma.user.findMany({
@@ -608,6 +612,89 @@ export async function manualCheckIn(studentId: string): Promise<ActionResult> {
       success: false,
       message:
         error instanceof Error ? error.message : "Failed to check in student",
+    };
+  }
+}
+
+// ============================================
+// MANUAL CHECK-OUT (Emergency Override)
+// ============================================
+
+/**
+ * Manually check-out a student when scanner fails or phone unavailable.
+ * Creates an EXIT access log with "Manual Override" note.
+ */
+export async function manualCheckOut(studentId: string): Promise<ActionResult> {
+  try {
+    const adminId = await requireSuperAdmin();
+
+    if (!studentId) {
+      return { success: false, message: "Student ID is required" };
+    }
+
+    // Verify target is a student
+    const student = await prisma.user.findUnique({
+      where: { id: studentId },
+      select: { role: true, fullName: true, sapId: true, isActive: true },
+    });
+
+    if (!student) {
+      return { success: false, message: "Student not found" };
+    }
+
+    if (student.role !== "STUDENT") {
+      return { success: false, message: "Target user is not a student" };
+    }
+
+    // Check if student is inside (has recent ENTRY without EXIT)
+    const lastLog = await prisma.accessLog.findFirst({
+      where: { userId: studentId },
+      orderBy: { timestamp: "desc" },
+    });
+
+    if (!lastLog || lastLog.type !== "ENTRY") {
+      return {
+        success: false,
+        message: "Student is not currently checked in",
+      };
+    }
+
+    // Create EXIT access log
+    await prisma.accessLog.create({
+      data: {
+        userId: studentId,
+        type: "EXIT",
+        status: "GRANTED",
+        metadata: { source: "Manual Override - Admin Check-Out" },
+        scannerId: adminId,
+      },
+    });
+
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        performerId: adminId,
+        action: "MANUAL_CHECKOUT",
+        targetId: studentId,
+        details: `Manual check-out for ${student.sapId} (${
+          student.fullName || "Unknown"
+        })`,
+      },
+    });
+
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/live");
+
+    return {
+      success: true,
+      message: `${student.fullName || student.sapId} checked out successfully`,
+    };
+  } catch (error) {
+    console.error("Manual Check-Out Error:", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Failed to check out student",
     };
   }
 }

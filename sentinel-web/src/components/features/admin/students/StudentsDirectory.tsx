@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -19,13 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   StudentDirectoryRow,
@@ -51,19 +45,21 @@ interface StudentsDirectoryProps {
   data: StudentDirectoryRow[];
   pageCount: number;
   currentPage: number;
-  currentFilter: string;
+  currentManagerSearch: string;
 }
 
 export function StudentsDirectory({
   data,
   pageCount,
   currentPage,
-  currentFilter,
+  currentManagerSearch,
 }: StudentsDirectoryProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
+  // Manager search state
+  const [managerInput, setManagerInput] = useState(currentManagerSearch);
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
@@ -79,12 +75,23 @@ export function StudentsDirectory({
     router.push(`?${params.toString()}`);
   };
 
-  const handleFilterChange = (value: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("filter", value);
-    params.set("page", "1"); // Reset to page 1
-    router.push(`?${params.toString()}`);
-  };
+  // Debounced manager search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (managerInput !== currentManagerSearch) {
+        const params = new URLSearchParams(searchParams);
+        if (managerInput.trim()) {
+          params.set("manager", managerInput.trim());
+        } else {
+          params.delete("manager");
+        }
+        params.set("page", "1");
+        router.push(`?${params.toString()}`);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [managerInput]);
 
   const handleRowClick = (studentId: string) => {
     router.push(`/admin/students/${studentId}`);
@@ -298,7 +305,7 @@ export function StudentsDirectory({
 
   return (
     <div className="space-y-4">
-      {/* Header with Export and Filter */}
+      {/* Header with Export and Manager Search */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-lg font-semibold">Student Directory</h2>
         <div className="flex items-center gap-2">
@@ -315,16 +322,12 @@ export function StudentsDirectory({
             )}
             Export CSV
           </Button>
-          <Select value={currentFilter} onValueChange={handleFilterChange}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Filter" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Students</SelectItem>
-              <SelectItem value="paid">Paid Only</SelectItem>
-              <SelectItem value="unpaid">Unpaid Only</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input
+            placeholder="Search by manager name..."
+            value={managerInput}
+            onChange={(e) => setManagerInput(e.target.value)}
+            className="w-[200px]"
+          />
         </div>
       </div>
 

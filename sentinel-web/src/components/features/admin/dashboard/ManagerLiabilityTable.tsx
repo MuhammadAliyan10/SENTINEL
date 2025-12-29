@@ -29,30 +29,50 @@ export function ManagerLiabilityTable({ data }: ManagerLiabilityTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Manager</TableHead>
-              <TableHead>Section</TableHead>
+              <TableHead>Class</TableHead>
               <TableHead className="text-right">Students</TableHead>
               <TableHead className="text-right">Liability</TableHead>
               <TableHead></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((manager) => (
-              <TableRow key={manager.id}>
-                <TableCell className="font-medium">{manager.name}</TableCell>
-                <TableCell>{manager.section || "—"}</TableCell>
-                <TableCell className="text-right">
-                  {manager.studentsOnboarded}
-                </TableCell>
-                <TableCell className="text-right font-bold text-red-600">
-                  Rs. {manager.cashLiability.toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {data.map((manager) => {
+              const semesterDisplay = manager.semester
+                ? (() => {
+                    const sem = Number(manager.semester);
+                    const suffix =
+                      sem === 1
+                        ? "st"
+                        : sem === 2
+                        ? "nd"
+                        : sem === 3
+                        ? "rd"
+                        : "th";
+                    return `${sem}${suffix}`;
+                  })()
+                : null;
+              const classDisplay =
+                semesterDisplay && manager.section
+                  ? `${semesterDisplay} ${manager.section}`
+                  : semesterDisplay || manager.section || "—";
+              return (
+                <TableRow key={manager.id}>
+                  <TableCell className="font-medium">{manager.name}</TableCell>
+                  <TableCell className="font-mono">{classDisplay}</TableCell>
+                  <TableCell className="text-right">
+                    {manager.studentsOnboarded}
+                  </TableCell>
+                  <TableCell className="text-right font-bold text-red-600">
+                    Rs. {manager.cashLiability.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>

@@ -28,6 +28,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+import { DownloadAuditPdfButton } from "@/components/features/admin/audit/DownloadAuditPdfButton";
+import { AuditManager } from "@/lib/pdf-generator";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,7 @@ async function getAuditData(page: number) {
           fullName: true,
           role: true,
           section: true,
+          semester: true,
           isActive: true,
           _count: {
             select: { createdUsers: true },
@@ -126,13 +129,34 @@ export default async function AuditPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">
-          Financial Audit Ledger
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Track cash liability by manager (paginated, optimized)
-        </p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">
+            Financial Audit Ledger
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Track cash liability by manager (paginated, optimized)
+          </p>
+        </div>
+        <DownloadAuditPdfButton
+          data={{
+            managers: managers.map((m) => ({
+              id: m.id,
+              sapId: m.sapId,
+              fullName: m.fullName,
+              role: m.role,
+              section: m.section,
+              semester: m.semester,
+              isActive: m.isActive,
+              studentsCount: m._count.createdUsers,
+            })) as AuditManager[],
+            ticketPrice,
+            totalStudents,
+            totalCash,
+            activeManagers,
+            totalManagers,
+          }}
+        />
       </div>
 
       {/* Summary Cards */}
@@ -200,7 +224,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50">
-                    <TableHead className="font-semibold">Section</TableHead>
+                    <TableHead className="font-semibold">Semester</TableHead>
                     <TableHead className="font-semibold">Manager</TableHead>
                     <TableHead className="font-semibold hidden sm:table-cell">
                       Role
@@ -220,6 +244,24 @@ export default async function AuditPage({ searchParams }: PageProps) {
                   {managers.map((manager) => {
                     const cashAmount =
                       manager._count.createdUsers * ticketPrice;
+                    const semesterDisplay = manager.semester
+                      ? (() => {
+                          const sem = Number(manager.semester);
+                          const suffix =
+                            sem === 1
+                              ? "st"
+                              : sem === 2
+                              ? "nd"
+                              : sem === 3
+                              ? "rd"
+                              : "th";
+                          return `${sem}${suffix}`;
+                        })()
+                      : null;
+                    const classDisplay =
+                      semesterDisplay && manager.section
+                        ? `${semesterDisplay}-${manager.section}`
+                        : semesterDisplay || manager.section || "—";
                     return (
                       <TableRow
                         key={manager.id}
@@ -228,7 +270,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
                         }
                       >
                         <TableCell className="font-mono font-medium">
-                          {manager.section || "—"}
+                          {classDisplay}
                         </TableCell>
                         <TableCell>
                           <div>

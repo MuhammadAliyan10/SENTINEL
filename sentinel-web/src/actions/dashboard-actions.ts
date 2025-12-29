@@ -44,6 +44,7 @@ export interface ManagerLiabilityItem {
   id: string;
   name: string;
   section: string | null;
+  semester: string | null;
   studentsOnboarded: number;
   cashLiability: number;
   lastActive: Date;
@@ -211,6 +212,7 @@ const getCachedManagerLiability = unstable_cache(
         fullName: true,
         sapId: true,
         section: true,
+        semester: true,
         updatedAt: true,
         _count: { select: { createdUsers: true } },
       },
@@ -221,6 +223,7 @@ const getCachedManagerLiability = unstable_cache(
       id: m.id,
       name: m.fullName || m.sapId,
       section: m.section,
+      semester: m.semester,
       studentsOnboarded: m._count.createdUsers,
       cashLiability: m._count.createdUsers * ticketPrice,
       lastActive: m.updatedAt,

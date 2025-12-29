@@ -115,6 +115,7 @@ export interface ManagerDetail {
   createdAt: Date;
   studentsCount: number;
   cashCollected: number;
+  ticketPrice: number;
 }
 
 export async function getManagerById(
@@ -151,6 +152,7 @@ export async function getManagerById(
     ...manager,
     studentsCount: manager._count.createdUsers,
     cashCollected: manager._count.createdUsers * ticketPrice,
+    ticketPrice,
   };
 }
 
@@ -161,6 +163,7 @@ export async function getManagerById(
 export interface ManagerStats {
   studentsRegistered: number;
   cashCollected: number;
+  ticketPrice: number;
   recentStudents: {
     id: string;
     sapId: string;
@@ -187,7 +190,7 @@ export async function getManagerStats(
     prisma.user.findMany({
       where: { createdById: managerId, role: "STUDENT" },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 100, // Increased for client-side filtering
       select: {
         id: true,
         sapId: true,
@@ -198,7 +201,7 @@ export async function getManagerStats(
     prisma.auditLog.findMany({
       where: { performerId: managerId },
       orderBy: { timestamp: "desc" },
-      take: 20,
+      take: 50, // Increased for client-side filtering
       select: {
         id: true,
         action: true,
@@ -215,6 +218,7 @@ export async function getManagerStats(
   return {
     studentsRegistered: students.length,
     cashCollected: students.length * ticketPrice,
+    ticketPrice,
     recentStudents: students,
     auditLogs,
   };

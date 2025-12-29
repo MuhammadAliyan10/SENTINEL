@@ -81,7 +81,14 @@ export default function ManagerProfileClient({
             <div className="flex flex-col items-center pt-6 pb-4 px-6">
               <div className="relative">
                 <Avatar className="h-24 w-24 bg-white border-4 border-white shadow-xl ring-4 ring-primary/10">
-                  <AvatarImage src={user.profilePhotoUrl || ""} />
+                  <AvatarImage
+                    src={
+                      user.profilePhotoUrl ||
+                      (user.role === "CR"
+                        ? "/avatars/Male.png"
+                        : "/avatars/Female.png")
+                    }
+                  />
                   <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/40 text-primary text-2xl font-bold">
                     {user.fullName?.charAt(0) || "M"}
                   </AvatarFallback>

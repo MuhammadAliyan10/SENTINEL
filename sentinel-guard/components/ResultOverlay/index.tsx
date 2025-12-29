@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeIn, ZoomIn } from "react-native-reanimated";
 import ImageView from "react-native-image-viewing";
-import { ApprovedResultCard } from "./ApprovedResultCard";
+// ApprovedResultCard import removed as we unified UI
+// import { ApprovedResultCard } from "./ApprovedResultCard";
 import { RejectedResultCard } from "./RejectedResultCard";
 import { ReturningResultCard } from "./ReturningResultCard";
 import { ExitResultCard } from "./ExitResultCard";
@@ -104,8 +105,12 @@ export default function ResultOverlay({
       className={`absolute inset-0 ${theme.bg} justify-center`}
     >
       <SafeAreaView className="flex-1 justify-between">
+        {/* Top: Title - Only show for regular ENTRY (not RETURNING or EXIT) - Actually we are unifying UI so maybe remove this title as ReturningCard has its own header?
+            The ReturningResultCard has "Welcome Back" or "Welcome" header.
+            The snippet at lines 108-120 shows a title. If I now use ReturningResultCard for all entries, I should probably HIDE this title because the card has it inside.
+         */}
         {/* Top: Title - Only show for regular ENTRY (not RETURNING or EXIT) */}
-        {isApproved && !isReturning && isEntry && (
+        {isApproved && !isReturning && isEntry && false && ( // Disabled as card handles it
           <Animated.View
             entering={ZoomIn.duration(250)}
             className="items-center pt-6"
@@ -128,16 +133,10 @@ export default function ResultOverlay({
           }
         >
           {isLoading ? (
-            <View className="items-center justify-center">
-              <View className="w-20 h-20 bg-white/20 rounded-full items-center justify-center mb-4 backdrop-blur-md">
+            <View className="items-center justify-center flex-1">
+              <View className="w-24 h-24 bg-black/40 rounded-full items-center justify-center backdrop-blur-md">
                 <ActivityIndicator size="large" color="#FFFFFF" />
               </View>
-              <Text
-                className="text-white text-lg font-bold tracking-widest"
-                style={{ fontFamily: "Figtree_700Bold" }}
-              >
-                VERIFYING...
-              </Text>
             </View>
           ) : isApproved && name ? (
             isReturning ? (
@@ -164,9 +163,8 @@ export default function ResultOverlay({
               />
             ) : (
               // Regular ENTRY - Card layout
-              <ApprovedResultCard
-                scanType={scanType}
-                isReturning={isReturning}
+              // Regular ENTRY - Use SAME wrapper as Returning for consistency
+              <ReturningResultCard
                 name={name}
                 sapId={sapId || "N/A"}
                 semester={semester || "-"}
@@ -174,6 +172,7 @@ export default function ResultOverlay({
                 profilePhotoUrl={profilePhotoUrl}
                 theme={theme}
                 onImagePress={() => setIsGalleryVisible(true)}
+                isReturning={false}
               />
             )
           ) : (
@@ -193,9 +192,8 @@ export default function ResultOverlay({
         <View className="px-4 mt-5 pb-3">
           <TouchableOpacity
             onPress={onDismiss}
-            className={`py-4 rounded-xl items-center ${
-              isApproved ? "bg-white" : "bg-white/90"
-            }`}
+            className={`py-4 rounded-xl items-center ${isApproved ? "bg-white" : "bg-white/90"
+              }`}
             activeOpacity={0.85}
             style={{
               shadowColor: "#000",
@@ -206,9 +204,8 @@ export default function ResultOverlay({
             }}
           >
             <Text
-              className={`text-base font-bold ${
-                isApproved ? theme.accentText : "text-rose-600"
-              }`}
+              className={`text-base font-bold ${isApproved ? theme.accentText : "text-rose-600"
+                }`}
               style={{ fontFamily: "Figtree_700Bold", letterSpacing: 1 }}
             >
               {isApproved ? "NEXT" : "DISMISS"}

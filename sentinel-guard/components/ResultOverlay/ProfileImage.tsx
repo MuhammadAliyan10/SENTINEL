@@ -24,11 +24,19 @@ export const ProfileImage: React.FC<ProfileImageProps> = ({
 
   // Generate initials from name
   const getInitials = (fullName: string): string => {
-    const parts = fullName.trim().split(" ");
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    if (!fullName) return "??";
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0] && parts[parts.length - 1]) {
+      const first = parts[0][0];
+      const last = parts[parts.length - 1][0];
+      if (first && last) {
+        return (first + last).toUpperCase();
+      }
     }
-    return fullName.substring(0, 2).toUpperCase();
+    if (fullName.length > 0) {
+      return fullName.substring(0, 2).toUpperCase();
+    }
+    return "??";
   };
 
   const imageContainerStyle = {

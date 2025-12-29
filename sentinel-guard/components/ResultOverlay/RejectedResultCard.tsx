@@ -72,7 +72,7 @@ export const RejectedResultCard: React.FC<RejectedResultCardProps> = ({
         className="text-white text-xl text-center font-bold mb-3 px-4"
         style={{ fontFamily: "Figtree_800ExtraBold", letterSpacing: 0 }}
       >
-        {reason || "Error"}
+        {reason?.replace(/_/g, " ") || "Error"}
       </Text>
 
       {/* Recent Activity List */}

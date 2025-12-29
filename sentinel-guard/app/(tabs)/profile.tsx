@@ -19,9 +19,20 @@ interface UserProfile {
   isActive: boolean;
 }
 
+import { useGuardStatus } from "../../hooks/useGuardStatus";
+
+// ... existing imports
+
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const { isActive } = useGuardStatus();
+
+  useEffect(() => {
+    if (profile) {
+      setProfile((prev) => prev ? { ...prev, isActive } : null);
+    }
+  }, [isActive]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -36,7 +47,7 @@ export default function ProfileScreen() {
         // Get profile from database
         const { data: userData, error } = await supabase
           .from("users")
-          .select("full_name, role, is_active")
+          .select("full_name, role")
           .eq("id", authData.user.id)
           .single();
 
@@ -48,7 +59,7 @@ export default function ProfileScreen() {
           email: authData.user.email || "Unknown",
           fullName: userData?.full_name || "Security Guard",
           role: userData?.role || "GUARD",
-          isActive: userData?.is_active ?? true,
+          isActive: isActive, // Use initial value from hook
         });
       } catch (e) {
         if (__DEV__) {
@@ -196,9 +207,8 @@ export default function ProfileScreen() {
             <View className="flex-row justify-between items-center px-4 py-4 border-b border-black-200">
               <View className="flex-row items-center">
                 <View
-                  className={`w-9 h-9 rounded-lg items-center justify-center mr-3 ${
-                    profile?.isActive ? "bg-emerald-500/20" : "bg-rose-500/20"
-                  }`}
+                  className={`w-9 h-9 rounded-lg items-center justify-center mr-3 ${profile?.isActive ? "bg-emerald-500/20" : "bg-rose-500/20"
+                    }`}
                 >
                   <Ionicons
                     name={
@@ -218,14 +228,12 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <View
-                className={`px-3 py-1 rounded-full ${
-                  profile?.isActive ? "bg-emerald-500/20" : "bg-rose-500/20"
-                }`}
+                className={`px-3 py-1 rounded-full ${profile?.isActive ? "bg-emerald-500/20" : "bg-rose-500/20"
+                  }`}
               >
                 <Text
-                  className={`text-sm font-semibold ${
-                    profile?.isActive ? "text-emerald-400" : "text-rose-400"
-                  }`}
+                  className={`text-sm font-semibold ${profile?.isActive ? "text-emerald-400" : "text-rose-400"
+                    }`}
                   style={{ fontFamily: "Figtree_600SemiBold" }}
                 >
                   {profile?.isActive ? "Active" : "Inactive"}

@@ -33,13 +33,14 @@ import {
 } from "../../src/lib/supabase";
 import { verifyQrSignature, parseQrData } from "../../src/utils/security";
 import { syncOfflineLogs } from "../../src/lib/offline";
+import { useGuardStatus } from "../../hooks/useGuardStatus";
 
 const { width } = Dimensions.get("window");
 const FRAME_SIZE = width * 0.75; // Larger scanning area
 
 type ScanMode = "ENTRY" | "EXIT";
 type ScanResult = {
-  status: "APPROVED" | "REJECTED";
+  status: "APPROVED" | "REJECTED" | "LOADING";
   isReturning?: boolean;
   name?: string;
   sapId?: string;
@@ -56,6 +57,8 @@ export default function ScannerScreen() {
   useState(() => {
     syncOfflineLogs();
   });
+
+
   const [permission, requestPermission] = useCameraPermissions();
   const [mode, setMode] = useState<ScanMode>("ENTRY");
   const [isScanning, setIsScanning] = useState(true);
@@ -63,7 +66,21 @@ export default function ScannerScreen() {
 
   const [showResult, setShowResult] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [isGuardActive, setIsGuardActive] = useState(true); // Default to true while checking
+
+  // Use Centralized Hook
+  const { isActive: isGuardActive } = useGuardStatus();
+
+  // Sync scanning state with guard status
+  useEffect(() => {
+    if (!isGuardActive) {
+      setIsScanning(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } else if (!showResult) {
+      // Re-enable scanning when active and not showing result
+      setIsScanning(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [isGuardActive, showResult]);
 
   // Ref for synchronous scan lock (prevents race conditions)
   const scanLockRef = useRef(false);
@@ -171,83 +188,6 @@ export default function ScannerScreen() {
       return null;
     }
   };
-
-
-
-  // Check guard status (Function to be reused)
-  const checkGuardStatus = async () => {
-    const session = await getCachedSession();
-    if (session?.userId) {
-      const { data } = await supabase
-        .from("users")
-        .select("is_active")
-        .eq("id", session.userId)
-        .single();
-
-      if (data) {
-        setIsGuardActive(data.is_active);
-        if (!data.is_active) {
-          setIsScanning(false);
-        } else if (!isScanning && !showResult) {
-          setIsScanning(true);
-        }
-      }
-    }
-  };
-
-  // Check on Focus
-  useFocusEffect(
-    useCallback(() => {
-      checkGuardStatus();
-    }, [])
-  );
-
-  // Real-time Subscription
-  useEffect(() => {
-    let subscription: any;
-
-    const setupRealtime = async () => {
-      const session = await getCachedSession();
-      if (!session?.userId) return;
-
-      console.log("Setting up realtime for user:", session.userId);
-
-      subscription = supabase
-        .channel('guard_status_check')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'users',
-            filter: `id=eq.\${session.userId}`,
-          },
-          (payload: any) => {
-            console.log("Realtime update received:", payload);
-            if (payload.new && typeof payload.new.is_active === 'boolean') {
-              const isActive = payload.new.is_active;
-              setIsGuardActive(isActive);
-              if (!isActive) {
-                // IMMEDIATE LOCK
-                setIsScanning(false);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              } else {
-                // UNLOCK
-                setIsScanning(true);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              }
-            }
-          }
-        )
-        .subscribe();
-    };
-
-    setupRealtime();
-
-    return () => {
-      if (subscription) supabase.removeChannel(subscription);
-    };
-  }, []);
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scanLockRef.current || !isScanning || !isGuardActive) return;
@@ -516,6 +456,8 @@ export default function ScannerScreen() {
       <StatusBar style="light" />
 
       <CameraView
+        key={`scanner-${isGuardActive}`} // Only remount when GUARD STATUS changes
+
         style={StyleSheet.absoluteFill}
         facing="back"
         enableTorch={flashEnabled}

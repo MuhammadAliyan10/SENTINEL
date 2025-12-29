@@ -13,6 +13,7 @@ interface ReturningResultCardProps {
     initialsGradient: string;
   };
   onImagePress: () => void;
+  isReturning?: boolean;
 }
 
 export const ReturningResultCard: React.FC<ReturningResultCardProps> = ({
@@ -23,10 +24,10 @@ export const ReturningResultCard: React.FC<ReturningResultCardProps> = ({
   profilePhotoUrl,
   theme,
   onImagePress,
+  isReturning = true,
 }) => {
   return (
     <View className="flex-1">
-      {/* Header with Welcome Back text - Flexible spacing with room for overlap */}
       {/* Header with Welcome Back text - Flexible spacing with room for overlap */}
       <View className="pt-8 pb-16 items-center justify-center shrink-0 z-20">
         <Text
@@ -35,7 +36,7 @@ export const ReturningResultCard: React.FC<ReturningResultCardProps> = ({
           numberOfLines={1}
           adjustsFontSizeToFit
         >
-          Welcome Back
+          {isReturning ? "Welcome Back" : "Entry"}
         </Text>
       </View>
 
@@ -78,14 +79,16 @@ export const ReturningResultCard: React.FC<ReturningResultCardProps> = ({
               ENTRY
             </Text>
           </View>
-          <View className="bg-emerald-100 px-4 py-2 rounded-lg">
-            <Text
-              className="text-emerald-600 text-sm font-bold"
-              style={{ fontFamily: "Figtree_600SemiBold" }}
-            >
-              ✓ RETURNING
-            </Text>
-          </View>
+          {isReturning && (
+            <View className="bg-emerald-100 px-4 py-2 rounded-lg">
+              <Text
+                className="text-emerald-600 text-sm font-bold"
+                style={{ fontFamily: "Figtree_600SemiBold" }}
+              >
+                ✓ RETURNING
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Info Grid */}

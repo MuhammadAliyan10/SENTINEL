@@ -115,6 +115,7 @@ export interface ManagerDetail {
   createdAt: Date;
   studentsCount: number;
   cashCollected: number;
+  ticketPrice: number;
 }
 
 export async function getManagerById(
@@ -151,6 +152,7 @@ export async function getManagerById(
     ...manager,
     studentsCount: manager._count.createdUsers,
     cashCollected: manager._count.createdUsers * ticketPrice,
+    ticketPrice,
   };
 }
 
@@ -161,6 +163,7 @@ export async function getManagerById(
 export interface ManagerStats {
   studentsRegistered: number;
   cashCollected: number;
+  ticketPrice: number;
   recentStudents: {
     id: string;
     sapId: string;
@@ -187,7 +190,7 @@ export async function getManagerStats(
     prisma.user.findMany({
       where: { createdById: managerId, role: "STUDENT" },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 100, // Increased for client-side filtering
       select: {
         id: true,
         sapId: true,
@@ -198,7 +201,7 @@ export async function getManagerStats(
     prisma.auditLog.findMany({
       where: { performerId: managerId },
       orderBy: { timestamp: "desc" },
-      take: 20,
+      take: 50, // Increased for client-side filtering
       select: {
         id: true,
         action: true,
@@ -215,6 +218,7 @@ export async function getManagerStats(
   return {
     studentsRegistered: students.length,
     cashCollected: students.length * ticketPrice,
+    ticketPrice,
     recentStudents: students,
     auditLogs,
   };
@@ -518,14 +522,21 @@ export async function deleteManager(managerId: string): Promise<ActionResult> {
   try {
     const admin = await requireSuperAdmin();
 
-    // Verify target is a manager and get their info
+    // ================================================================
+    // STEP 1: VERIFY TARGET IS A MANAGER & GET COMPLETE INFO
+    // ================================================================
     const manager = await prisma.user.findUnique({
       where: { id: managerId },
       select: {
         role: true,
         fullName: true,
         sapId: true,
-        _count: { select: { createdUsers: true } },
+        _count: {
+          select: {
+            createdUsers: true, // Students they registered
+            auditLogs: true, // Audit logs where they are the performer
+          },
+        },
       },
     });
 
@@ -536,15 +547,58 @@ export async function deleteManager(managerId: string): Promise<ActionResult> {
       };
     }
 
-    // Prevent deletion if they have created users (financial liability)
+    // ================================================================
+    // STEP 2: PROTECTION - CHECK IF THEY HAVE GENERATED PASSES
+    // ================================================================
+    // SECURITY FIX: Prevent deletion if manager has financial liability
     if (manager._count.createdUsers > 0) {
       return {
         success: false,
-        message: `Cannot delete ${manager.role} with ${manager._count.createdUsers} registered students. Transfer responsibility first.`,
+        message: `This manager has ${manager._count.createdUsers} generated passes and cannot be deleted. Please transfer responsibility or use the "Freeze" option instead.`,
       };
     }
 
-    // Delete from Supabase Auth
+    // ================================================================
+    // STEP 3: HANDLE AUDIT LOG FOREIGN KEY CONSTRAINT
+    // ================================================================
+    // The manager may have audit logs where they are the "performer".
+    // We have two options:
+    // A) Delete the audit logs (loses history)
+    // B) Nullify the performerId (preserves history, but breaks referential integrity)
+    // C) Prevent deletion if audit logs exist (safest)
+    //
+    // CHOSEN APPROACH: Option C - Prevent deletion if audit logs exist
+    // This preserves the complete audit trail for compliance.
+
+    if (manager._count.auditLogs > 0) {
+      return {
+        success: false,
+        message: `Cannot delete manager with ${manager._count.auditLogs} audit log entries. This manager's actions are part of the system's audit trail and must be preserved. Use the "Freeze" option to deactivate the account instead.`,
+      };
+    }
+
+    // ================================================================
+    // STEP 4: SAFE DELETE - CORRECT ORDER
+    // ================================================================
+    // CRITICAL FIX: Delete from Prisma FIRST, THEN from Supabase Auth
+    // This prevents the "orphaned auth record with invalid DB state" bug.
+    //
+    // OLD APPROACH (BUGGED):
+    // 1. Delete from Supabase Auth ✗
+    // 2. Delete from Prisma ✗ (fails due to FK constraint)
+    // Result: Auth deleted, DB intact → User cannot login (Invalid Credentials)
+    //
+    // NEW APPROACH (CORRECT):
+    // 1. Delete from Prisma ✓ (validates all constraints)
+    // 2. Delete from Supabase Auth ✓
+    // Result: If Prisma fails, Auth is untouched → User can still login
+
+    // Delete from Prisma (this will fail if any FK constraints exist)
+    await prisma.user.delete({
+      where: { id: managerId },
+    });
+
+    // Only proceed to Auth deletion if Prisma deletion succeeded
     const supabaseAdmin = createAdminClient();
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(
       managerId
@@ -552,15 +606,17 @@ export async function deleteManager(managerId: string): Promise<ActionResult> {
 
     if (authError) {
       console.error("Supabase Auth Delete Error:", authError);
-      // Continue with Prisma deletion even if Auth fails
+      // If Auth deletion fails but Prisma succeeded, log a warning
+      // The account is now orphaned in Auth but gone from DB
+      // This is better than the reverse (orphaned in DB, gone from Auth)
+      console.warn(
+        `Manager ${managerId} deleted from database but Auth deletion failed. Manual cleanup may be required.`
+      );
     }
 
-    // Delete from Prisma
-    await prisma.user.delete({
-      where: { id: managerId },
-    });
-
-    // Log the action
+    // ================================================================
+    // STEP 5: LOG THE DELETION
+    // ================================================================
     await prisma.auditLog.create({
       data: {
         performerId: admin.id,
@@ -572,6 +628,9 @@ export async function deleteManager(managerId: string): Promise<ActionResult> {
       },
     });
 
+    // ================================================================
+    // STEP 6: REVALIDATE CACHES
+    // ================================================================
     revalidatePath("/admin/managers");
     revalidateTag(CACHE_TAGS.managers, "max");
 
@@ -581,10 +640,30 @@ export async function deleteManager(managerId: string): Promise<ActionResult> {
     };
   } catch (error) {
     console.error("Delete Manager Error:", error);
+
+    // ENHANCED ERROR HANDLING: Provide specific messages for common errors
+    if (error instanceof Error) {
+      // Check if it's a Prisma foreign key constraint error
+      if (
+        error.message.includes("Foreign key constraint") ||
+        error.message.includes("fkey")
+      ) {
+        return {
+          success: false,
+          message:
+            "Cannot delete manager due to existing dependencies. This manager has associated records (audit logs, access logs, or created users) that must be handled first.",
+        };
+      }
+
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+
     return {
       success: false,
-      message:
-        error instanceof Error ? error.message : "Failed to delete manager",
+      message: "Failed to delete manager",
     };
   }
 }

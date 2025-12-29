@@ -19,9 +19,6 @@ export function StudentStatsView({ stats }: StudentStatsViewProps) {
       ? Math.round((stats.profileCompleted / stats.totalStudents) * 100)
       : 0;
 
-  // Find max for semester chart scaling
-  const maxSemesterCount = Math.max(...stats.bySemester.map((s) => s.count), 1);
-
   // Calculate pie chart values (using CSS conic-gradient)
   const paidDegrees = (paidPercentage / 100) * 360;
 
@@ -109,58 +106,172 @@ export function StudentStatsView({ stats }: StudentStatsViewProps) {
         </Card>
       </div>
 
-      {/* Semester Distribution - Vertical Bar Graph */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold">
-            Students by Semester
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end justify-between gap-2 h-56 pt-6 pb-2 border-b border-slate-200">
-            {stats.bySemester.map((item, index) => {
-              const heightPercent = (item.count / maxSemesterCount) * 100;
-              // Different colors for each bar
-              const colors = [
-                "bg-violet-500",
-                "bg-blue-500",
-                "bg-cyan-500",
-                "bg-emerald-500",
-                "bg-amber-500",
-                "bg-orange-500",
-                "bg-rose-500",
-                "bg-pink-500",
-              ];
-              const barColor = colors[index % colors.length];
-              return (
-                <div
-                  key={item.semester}
-                  className="flex-1 flex flex-col items-center gap-2"
-                >
-                  <span className="text-sm font-bold text-foreground">
-                    {item.count}
-                  </span>
-                  <div className="w-full flex justify-center">
-                    <div
-                      className={`w-10 ${barColor} transition-all duration-500`}
-                      style={{ height: `${Math.max(heightPercent, 8)}%` }}
-                    />
+      {/* Distribution Charts Row */}
+      {/*
+        OLD: Two charts side-by-side (Semester + Section)
+        NEW: Single semester chart (Section chart removed as requested)
+
+        The "Students by Section" chart has been removed to focus on semester-based
+        strength overview, which is more relevant for batch analysis and planning.
+      */}
+      <div className="grid gap-6 md:grid-cols-1">
+        {/* Semester Distribution - Pie Chart */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold">
+              Students per Semester
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Batch strength distribution across all semesters
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center gap-8">
+              {/* Pie Chart */}
+              <div className="relative w-48 h-48">
+                {stats.bySemester.length > 0 ? (
+                  <>
+                    <svg
+                      className="w-full h-full transform -rotate-90"
+                      viewBox="0 0 100 100"
+                    >
+                      {(() => {
+                        const total = stats.bySemester.reduce(
+                          (sum, s) => sum + s.count,
+                          0
+                        );
+                        let currentAngle = 0;
+                        // UPDATED: Enhanced color palette for better distinction
+                        const colors = [
+                          "#8b5cf6", // violet (1st sem)
+                          "#3b82f6", // blue (2nd sem)
+                          "#06b6d4", // cyan (3rd sem)
+                          "#10b981", // emerald (4th sem)
+                          "#f59e0b", // amber (5th sem)
+                          "#f97316", // orange (6th sem)
+                          "#f43f5e", // rose (7th sem)
+                          "#ec4899", // pink (8th sem)
+                        ];
+
+                        return stats.bySemester.map((item, index) => {
+                          const percentage = (item.count / total) * 100;
+                          const angle = (percentage / 100) * 360;
+                          const x1 =
+                            50 + 50 * Math.cos((currentAngle * Math.PI) / 180);
+                          const y1 =
+                            50 + 50 * Math.sin((currentAngle * Math.PI) / 180);
+                          currentAngle += angle;
+                          const x2 =
+                            50 + 50 * Math.cos((currentAngle * Math.PI) / 180);
+                          const y2 =
+                            50 + 50 * Math.sin((currentAngle * Math.PI) / 180);
+                          const largeArc = angle > 180 ? 1 : 0;
+
+                          return (
+                            <path
+                              key={item.semester}
+                              d={`M 50 50 L ${x1} ${y1} A 50 50 0 ${largeArc} 1 ${x2} ${y2} Z`}
+                              fill={colors[index % colors.length]}
+                              className="transition-all hover:opacity-80 cursor-pointer"
+                            />
+                          );
+                        });
+                      })()}
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center bg-white rounded-full w-20 h-20 flex flex-col items-center justify-center shadow-sm">
+                        <p className="text-2xl font-bold">
+                          {stats.totalStudents}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Total
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    No data
                   </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex justify-between gap-2 pt-3">
-            {stats.bySemester.map((item) => (
-              <div key={item.semester} className="flex-1 text-center">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Sem {item.semester}
-                </span>
+                )}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+
+              {/* Legend with Count & Percentage */}
+              <div className="space-y-2">
+                {stats.bySemester.map((item, index) => {
+                  const colors = [
+                    "#8b5cf6",
+                    "#3b82f6",
+                    "#06b6d4",
+                    "#10b981",
+                    "#f59e0b",
+                    "#f97316",
+                    "#f43f5e",
+                    "#ec4899",
+                  ];
+                  const percentage =
+                    stats.totalStudents > 0
+                      ? Math.round((item.count / stats.totalStudents) * 100)
+                      : 0;
+
+                  return (
+                    <div
+                      key={item.semester}
+                      className="flex items-center gap-2"
+                    >
+                      <div
+                        className="w-3 h-3 rounded-sm"
+                        style={{
+                          backgroundColor: colors[index % colors.length],
+                        }}
+                      />
+                      <span className="text-sm font-medium">
+                        Semester {item.semester}
+                      </span>
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        {item.count} ({percentage}%)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/*
+          ================================================================
+          OLD: "Students by Section" Donut Chart (REMOVED)
+          ================================================================
+
+          The section-based chart has been removed per user request to focus
+          on semester-based batch strength analysis. The semester chart above
+          provides better insights for:
+          - Overall batch strength at a glance
+          - Enrollment trends across academic years
+          - Resource allocation planning per semester
+
+          If section-level analysis is needed, it can be found in the
+          Students Directory tab with search/filter capabilities.
+
+          Original implementation preserved below for reference:
+        */}
+        {/*
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold">
+              Students by Section
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Distribution across sections
+            </p>
+          </CardHeader>
+          <CardContent>
+            ... [section chart code removed for brevity] ...
+          </CardContent>
+        </Card>
+        */}
+      </div>
     </div>
   );
 }

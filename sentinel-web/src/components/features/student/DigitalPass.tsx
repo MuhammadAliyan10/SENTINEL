@@ -198,9 +198,46 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
     }
   }, [supabase, user.id]);
 
+  // ============================================
+  // REALTIME SUBSCRIPTION WITH FALLBACK POLLING
+  // ============================================
+  // Production-grade: monitors connection state, falls back to polling if realtime fails
+
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const lastRealtimeUpdateRef = useRef<number>(Date.now());
+  const fallbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleAccessLogUpdate = useCallback(
+    (newLog: { type: string; timestamp: string }) => {
+      // Track that we received a realtime update
+      lastRealtimeUpdateRef.current = Date.now();
+
+      if (newLog.type === "ENTRY") {
+        setAccessState("INSIDE");
+        // Ensure timestamp is interpreted as UTC (append Z if missing)
+        const ts =
+          newLog.timestamp.endsWith("Z") || newLog.timestamp.includes("+")
+            ? newLog.timestamp
+            : newLog.timestamp + "Z";
+        setLastEntry(new Date(ts));
+        setHasEnteredBefore(true);
+        setIsFlipped(true); // Auto-flip to show approved stamp
+      } else if (newLog.type === "EXIT") {
+        setAccessState("OUTSIDE");
+        setLastEntry(null);
+        setIsFlipped(true); // Keep flipped to show OUTSIDE stamp
+      }
+    },
+    []
+  );
+
   const setupRealtimeSubscription = useCallback(() => {
     const channel = supabase
-      .channel(`access-logs-${user.id}`)
+      .channel(`access-logs-${user.id}`, {
+        config: {
+          presence: { key: user.id },
+        },
+      })
       .on(
         "postgres_changes",
         {
@@ -211,28 +248,81 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
         },
         (payload) => {
           const newLog = payload.new as { type: string; timestamp: string };
-          if (newLog.type === "ENTRY") {
-            setAccessState("INSIDE");
-            // Ensure timestamp is interpreted as UTC (append Z if missing)
-            const ts =
-              newLog.timestamp.endsWith("Z") || newLog.timestamp.includes("+")
-                ? newLog.timestamp
-                : newLog.timestamp + "Z";
-            setLastEntry(new Date(ts));
-            setHasEnteredBefore(true);
-            setIsFlipped(true); // Auto-flip to show approved stamp
-          } else if (newLog.type === "EXIT") {
-            setAccessState("OUTSIDE");
-            setLastEntry(null);
-            setIsFlipped(true); // Keep flipped to show OUTSIDE stamp
-          }
+          handleAccessLogUpdate(newLog);
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        // Track connection state for fallback logic
+        if (status === "SUBSCRIBED") {
+          setRealtimeConnected(true);
+          console.log("[Realtime] Connected successfully");
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+          setRealtimeConnected(false);
+          console.warn("[Realtime] Connection closed or error:", err?.message);
+        } else if (status === "TIMED_OUT") {
+          setRealtimeConnected(false);
+          console.warn("[Realtime] Connection timed out");
+        }
+      });
+
     return () => {
       supabase.removeChannel(channel);
+      setRealtimeConnected(false);
     };
-  }, [supabase, user.id]);
+  }, [supabase, user.id, handleAccessLogUpdate]);
+
+  // Fallback polling: polls database when realtime is not working
+  const setupFallbackPolling = useCallback(() => {
+    // Poll every 5 seconds when realtime is down, every 15s when connected (backup)
+    const pollInterval = realtimeConnected ? 15000 : 5000;
+
+    const poll = async () => {
+      // Skip if we got a realtime update in the last 10 seconds
+      const timeSinceLastUpdate = Date.now() - lastRealtimeUpdateRef.current;
+      if (realtimeConnected && timeSinceLastUpdate < 10000) {
+        return; // Realtime is working, skip poll
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("access_logs")
+          .select("type, timestamp")
+          .eq("user_id", user.id)
+          .order("timestamp", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data && !error) {
+          const logData = data as { type: string; timestamp: string };
+          const currentState = accessState;
+          const newState = logData.type === "ENTRY" ? "INSIDE" : "OUTSIDE";
+
+          // Only update if state actually changed (prevents unnecessary re-renders)
+          if (currentState !== newState) {
+            handleAccessLogUpdate(logData);
+            console.log("[Fallback] State updated via polling:", newState);
+          }
+        }
+      } catch (err) {
+        // Silent failure - don't spam console during offline
+      }
+    };
+
+    fallbackIntervalRef.current = setInterval(poll, pollInterval);
+
+    return () => {
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current);
+        fallbackIntervalRef.current = null;
+      }
+    };
+  }, [
+    supabase,
+    user.id,
+    realtimeConnected,
+    accessState,
+    handleAccessLogUpdate,
+  ]);
 
   const setupConnectivityMonitor = useCallback(() => {
     const handleOnline = () => setIsOffline(false);
@@ -246,13 +336,20 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
     };
   }, []);
 
+  // Main initialization effect
   useEffect(() => {
-    // PERFORMANCE FIX: Refresh every 60s instead of 15s (QR valid for 5 min)
-    // Reduces server load by 4x at 800 users
+    // PERFORMANCE FIX: Refresh QR every 60s instead of 15s (QR valid for 5 min)
     qrIntervalRef.current = setInterval(refreshQrPayload, 60000);
+
+    // Initial state check
     checkInitialAccessState();
+
+    // Setup realtime subscription
     const unsubscribeRealtime = setupRealtimeSubscription();
+
+    // Setup connectivity monitor
     const unsubscribeConnectivity = setupConnectivityMonitor();
+
     return () => {
       if (qrIntervalRef.current) clearInterval(qrIntervalRef.current);
       unsubscribeRealtime();
@@ -264,6 +361,14 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
     setupRealtimeSubscription,
     setupConnectivityMonitor,
   ]);
+
+  // Separate effect for fallback polling (re-creates when realtimeConnected changes)
+  useEffect(() => {
+    const unsubscribeFallback = setupFallbackPolling();
+    return () => {
+      unsubscribeFallback();
+    };
+  }, [setupFallbackPolling]);
 
   // ============================================
   // DRAG HANDLERS
@@ -307,7 +412,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
 
   return (
     <div
-      className="min-h-screen min-h-[100dvh] bg-white flex flex-col items-center relative overflow-hidden select-none"
+      className="min-h-dvh bg-white flex flex-col items-center relative overflow-hidden select-none"
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* SVG Straps - ON TOP of card (z-20) */}
@@ -428,10 +533,10 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
 
             {/* Primary color header */}
             <div className="bg-primary pt-8 pb-4 px-2 text-center">
-              <p className="text-white/80 font-mono text-[10px] tracking-[0.15em] uppercase font-medium">
+              <p className="text-white/80 text-[10px] tracking-[0.15em] uppercase font-medium">
                 Department of Computer Science
               </p>
-              <h1 className="text-white font-mono text-sm font-bold mt-1 tracking-tight">
+              <h1 className="text-white text-sm font-bold mt-1 tracking-tight">
                 ANNUAL DINNER 2026
               </h1>
             </div>
@@ -445,7 +550,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
             )}
 
             {/* QR Code Section */}
-            <div className="flex-1 flex flex-col items-center justify-center mt-5 p-6">
+            <div className="flex-1 flex flex-col items-center justify-center mt-4 p-6">
               <div
                 className={`p-4 bg-white rounded-2xl border-2 ${
                   isOffline
@@ -465,6 +570,17 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                 />
               </div>
             </div>
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-primary to-primary/90 py-2.5 px-4">
+              <p className="text-white/70 text-[8px] text-center tracking-wide">
+                This application is developed by
+                <a
+                  className="text-white pl-[1px] font-semibold underline! transition-all"
+                  href="/about-developers"
+                >
+                  Bounty Hunters
+                </a>
+              </p>
+            </div>
           </div>
 
           {/* ============ BACK SIDE ============ */}
@@ -481,13 +597,14 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
             {/* Back content */}
             <div className="h-full flex flex-col items-center p-5 pt-8">
               {/* University Logo */}
-              <div className="w-45 h-15 overflow-hidden mb-4">
+              <div className="w-50 h-15">
                 <Image
-                  src="/UniversityLogo.jpeg"
+                  src="/uolLogo.png"
                   alt="University Logo"
-                  width={60}
-                  height={60}
-                  className="w-full h-full object-cover"
+                  width={210}
+                  height={120}
+                  priority
+                  className="object-contain"
                 />
               </div>
 
@@ -501,7 +618,7 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                     className="object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/30 flex items-center justify-center text-primary font-bold text-xl">
+                  <div className="w-full h-full bg-linear-to-br from-primary/20 to-primary/30 flex items-center justify-center text-primary font-bold text-xl">
                     {user.fullName?.charAt(0) || "S"}
                   </div>
                 )}
@@ -549,8 +666,8 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
             {/* Warning Footer */}
             <div className="absolute bottom-0 left-0 right-0 bg-red-600 py-2 px-3">
               <p className="text-white text-[9px] text-center font-medium leading-tight">
-                ⚠️ Sharing your pass or attempting to bypass security will
-                result in rustication
+                Sharing your pass or attempting to bypass security will result
+                in rustication
               </p>
             </div>
 
@@ -568,13 +685,13 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                 }}
               >
                 <div
-                  className="px-8 py-3 border-4 border-emerald-500 rounded-lg"
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-500/40  via-emerald-500/70  to-emerald-500/40 rounded-lg"
                   style={{
                     transform: "rotate(-12deg)",
                   }}
                 >
                   <p
-                    className="text-emerald-500 font-bold text-3xl tracking-widest uppercase"
+                    className="text-white font-bold text-3xl tracking-widest uppercase"
                     style={{
                       textShadow: "0 0 10px rgba(16, 185, 129, 0.3)",
                     }}
@@ -599,13 +716,13 @@ export default function DigitalPass({ user, initialQrData }: DigitalPassProps) {
                 }}
               >
                 <div
-                  className="px-8 py-3 border-4 border-blue-500 rounded-lg"
+                  className="px-8 py-3  bg-gradient-to-r from-blue-500/40  via-blue-500/70  to-blue-500/40 rounded-lg"
                   style={{
                     transform: "rotate(12deg)",
                   }}
                 >
                   <p
-                    className="text-blue-500 font-bold text-3xl tracking-widest uppercase"
+                    className="text-white font-bold text-3xl tracking-widest uppercase"
                     style={{
                       textShadow: "0 0 10px rgba(59, 130, 246, 0.3)",
                     }}

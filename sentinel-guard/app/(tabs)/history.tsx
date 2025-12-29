@@ -5,7 +5,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
-  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -39,30 +38,14 @@ export default function HistoryScreen() {
   const [filter, setFilter] = useState<FilterType>("ALL");
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   // Apply filter client-side
   const applyFilter = useCallback(
-    (logs: LogEntry[], filterType: FilterType, query: string) => {
-      let filtered = logs;
-
-      // 1. Filter by Type
-      if (filterType !== "ALL") {
-        filtered = filtered.filter((log) => log.type === filterType);
+    (logs: LogEntry[], filterType: FilterType) => {
+      if (filterType === "ALL") {
+        return logs;
       }
-
-      // 2. Filter by Search Query
-      if (query.trim()) {
-        const lowerQuery = query.toLowerCase().trim();
-        filtered = filtered.filter(
-          (log) =>
-            log.user_name.toLowerCase().includes(lowerQuery) ||
-            log.user_sap_id.toLowerCase().includes(lowerQuery)
-        );
-      }
-
-      return filtered;
+      return logs.filter((log) => log.type === filterType);
     },
     []
   );
@@ -123,7 +106,7 @@ export default function HistoryScreen() {
       }
 
       // Apply current filter to display
-      setDisplayLogs(applyFilter(updatedAllLogs, filter, searchQuery));
+      setDisplayLogs(applyFilter(updatedAllLogs, filter));
 
       // Check if there are more items
       setHasMore((data || []).length === ITEMS_PER_PAGE);
@@ -141,8 +124,8 @@ export default function HistoryScreen() {
 
   // Apply filter client-side when filter changes
   useEffect(() => {
-    setDisplayLogs(applyFilter(allLogs, filter, searchQuery));
-  }, [filter, searchQuery, allLogs, applyFilter]);
+    setDisplayLogs(applyFilter(allLogs, filter));
+  }, [filter, allLogs, applyFilter]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -167,8 +150,9 @@ export default function HistoryScreen() {
       <View className="bg-black-100 rounded-xl p-3 mb-2 flex-row items-center border border-black-200">
         {/* Icon */}
         <View
-          className={`w-10 h-10 rounded-lg items-center justify-center mr-3 ${isEntry ? "bg-emerald-500/20" : "bg-rose-500/20"
-            }`}
+          className={`w-10 h-10 rounded-lg items-center justify-center mr-3 ${
+            isEntry ? "bg-emerald-500/20" : "bg-rose-500/20"
+          }`}
         >
           <Ionicons
             name={isEntry ? "arrow-down" : "arrow-up"}
@@ -197,12 +181,14 @@ export default function HistoryScreen() {
         {/* Time */}
         <View className="items-end">
           <View
-            className={`px-2 py-0.5 rounded mb-0.5 ${isEntry ? "bg-emerald-500/20" : "bg-rose-500/20"
-              }`}
+            className={`px-2 py-0.5 rounded mb-0.5 ${
+              isEntry ? "bg-emerald-500/20" : "bg-rose-500/20"
+            }`}
           >
             <Text
-              className={`text-xs font-bold ${isEntry ? "text-emerald-400" : "text-rose-400"
-                }`}
+              className={`text-xs font-bold ${
+                isEntry ? "text-emerald-400" : "text-rose-400"
+              }`}
               style={{ fontFamily: "Figtree_700Bold" }}
             >
               {isEntry ? "IN" : "OUT"}
@@ -247,68 +233,31 @@ export default function HistoryScreen() {
     <SafeAreaView className="flex-1 bg-primary">
       <StatusBar style="light" />
 
-      {/* Header with Search & Refresh */}
-      <View className="px-4 py-4 bg-black-100 border-b border-black-200">
-        <View className="flex-row justify-between items-center mb-2">
-          <View>
-            <Text
-              className="text-white text-2xl font-bold"
-              style={{ fontFamily: "Figtree_800ExtraBold" }}
-            >
-              Scan History
-            </Text>
-            <Text
-              className="text-gray-100 text-sm"
-              style={{ fontFamily: "Figtree_400Regular" }}
-            >
-              {allLogs.length} scans logged
-            </Text>
-          </View>
-
-          <View className="flex-row gap-2">
-            <TouchableOpacity
-              onPress={() => setShowSearch(!showSearch)}
-              className={`p-2 rounded-xl ${showSearch ? "bg-white" : "bg-black-200"
-                }`}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="search"
-                size={20}
-                color={showSearch ? "#000" : "#fff"}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleRefresh}
-              disabled={refreshing}
-              className="bg-secondary p-2 rounded-xl"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="refresh" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
+      {/* Header with Refresh Button */}
+      <View className="px-4 py-4 bg-black-100 border-b border-black-200 flex-row justify-between items-center">
+        <View>
+          <Text
+            className="text-white text-2xl font-bold mb-1"
+            style={{ fontFamily: "Figtree_800ExtraBold" }}
+          >
+            Scan History
+          </Text>
+          <Text
+            className="text-gray-100 text-sm"
+            style={{ fontFamily: "Figtree_400Regular" }}
+          >
+            {allLogs.length} scans logged
+          </Text>
         </View>
 
-        {/* Collapsible Search Bar */}
-        {showSearch && (
-          <View className="flex-row items-center bg-black-200 rounded-xl px-3 py-2 mb-2 animate-in fade-in slide-in-from-top-1">
-            <Ionicons name="search" size={16} color="#9CA3AF" />
-            <TextInput
-              className="flex-1 ml-2 text-white font-medium"
-              placeholder="Search by name or ID..."
-              placeholderTextColor="#6B7280"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              style={{ fontFamily: "Figtree_500Medium" }}
-              autoFocus
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={16} color="#6B7280" />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+        <TouchableOpacity
+          onPress={handleRefresh}
+          disabled={refreshing}
+          className="bg-secondary p-2 rounded-xl"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="refresh" size={20} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {/* Filter Buttons */}
@@ -316,12 +265,14 @@ export default function HistoryScreen() {
         <View className="flex-row gap-2">
           <TouchableOpacity
             onPress={() => setFilter("ALL")}
-            className={`flex-1 py-2.5 rounded-lg ${filter === "ALL" ? "bg-secondary" : "bg-black-200"
-              }`}
+            className={`flex-1 py-2.5 rounded-lg ${
+              filter === "ALL" ? "bg-secondary" : "bg-black-200"
+            }`}
           >
             <Text
-              className={`text-center text-sm font-bold ${filter === "ALL" ? "text-primary" : "text-gray-100"
-                }`}
+              className={`text-center text-sm font-bold ${
+                filter === "ALL" ? "text-primary" : "text-gray-100"
+              }`}
               style={{ fontFamily: "Figtree_600SemiBold" }}
             >
               All
@@ -329,12 +280,14 @@ export default function HistoryScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setFilter("ENTRY")}
-            className={`flex-1 py-2.5 rounded-lg ${filter === "ENTRY" ? "bg-emerald-600" : "bg-black-200"
-              }`}
+            className={`flex-1 py-2.5 rounded-lg ${
+              filter === "ENTRY" ? "bg-emerald-600" : "bg-black-200"
+            }`}
           >
             <Text
-              className={`text-center text-sm font-bold ${filter === "ENTRY" ? "text-white" : "text-gray-100"
-                }`}
+              className={`text-center text-sm font-bold ${
+                filter === "ENTRY" ? "text-white" : "text-gray-100"
+              }`}
               style={{ fontFamily: "Figtree_600SemiBold" }}
             >
               Entries
@@ -342,12 +295,14 @@ export default function HistoryScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setFilter("EXIT")}
-            className={`flex-1 py-2.5 rounded-lg ${filter === "EXIT" ? "bg-rose-600" : "bg-black-200"
-              }`}
+            className={`flex-1 py-2.5 rounded-lg ${
+              filter === "EXIT" ? "bg-rose-600" : "bg-black-200"
+            }`}
           >
             <Text
-              className={`text-center text-sm font-bold ${filter === "EXIT" ? "text-white" : "text-gray-100"
-                }`}
+              className={`text-center text-sm font-bold ${
+                filter === "EXIT" ? "text-white" : "text-gray-100"
+              }`}
               style={{ fontFamily: "Figtree_600SemiBold" }}
             >
               Exits

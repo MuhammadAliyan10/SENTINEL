@@ -26,23 +26,20 @@ export const ReturningResultCard: React.FC<ReturningResultCardProps> = ({
 }) => {
   return (
     <View className="flex-1">
-      {/* Header with Welcome Back text - Flexible spacing with room for overlap */}
-      {/* Header with Welcome Back text - Flexible spacing with room for overlap */}
-      <View className="pt-8 pb-16 items-center justify-center shrink-0 z-20">
+      {/* Header with Welcome Back text - higher position */}
+      <View className="bg-white/10 pt-8 pb-14 items-center">
         <Text
-          className="text-white text-2xl font-bold tracking-wider text-center px-4"
+          className="text-white text-3xl font-bold"
           style={{ fontFamily: "Figtree_700Bold" }}
-          numberOfLines={1}
-          adjustsFontSizeToFit
         >
           Welcome Back
         </Text>
       </View>
 
-      {/* White card section - Flex 1 to take remaining space */}
-      <View className="bg-white flex-1 px-6 pt-20 relative rounded-t-3xl">
-        {/* Profile Photo - Absolute positioned to overlap perfectly */}
-        <View className="absolute top-[-55px] left-0 right-0 items-center z-10">
+      {/* White card section - no rounded corners, less height */}
+      <View className="bg-white flex-1 px-6 pt-2">
+        {/* Profile Photo - overlapping, border only */}
+        <View className="items-center -mt-16 mb-3">
           <ProfileImage
             profilePhotoUrl={profilePhotoUrl}
             name={name}
@@ -54,7 +51,7 @@ export const ReturningResultCard: React.FC<ReturningResultCardProps> = ({
 
         {/* Name */}
         <Text
-          className="text-gray-900 text-2xl font-bold text-center mb-1 mt-2"
+          className="text-gray-900 text-2xl font-bold text-center mb-1"
           style={{ fontFamily: "Figtree_700Bold" }}
         >
           {name}

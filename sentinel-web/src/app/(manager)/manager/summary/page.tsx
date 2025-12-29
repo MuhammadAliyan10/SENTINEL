@@ -125,7 +125,7 @@ export default function SummaryPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-3 md:px-4 pb-3">
-                <div className="text-xl md:text-3xl font-bold text-emerald-600">
+                <div className="text-xl md:text-2xl font-bold text-emerald-600">
                   Rs. {summary.stats.cashCollected.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -169,95 +169,77 @@ export default function SummaryPage() {
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="p-0 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/50 border-b">
-                      <th className="text-left font-semibold px-4 py-2">#</th>
-                      <th className="text-left font-semibold px-4 py-2">
-                        Full Name
-                      </th>
-                      <th className="text-left font-semibold px-4 py-2 hidden sm:table-cell">
-                        SAP ID
-                      </th>
-                      <th className="text-right font-semibold px-4 py-2">
-                        Amount
-                      </th>
-                      <th className="text-right font-semibold px-4 py-2">
-                        Date & Time
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedStudents.map((student, index) => (
-                      <tr
-                        key={student.id}
-                        className="border-b last:border-0 print-break-inside-avoid hover:bg-muted/30 transition-colors"
-                      >
-                        <td className="px-4 py-2 font-mono text-muted-foreground text-xs">
-                          {startIndex + index + 1}
-                        </td>
-                        <td className="px-4 py-2">
-                          <div className="font-medium truncate max-w-[100px] md:max-w-none">
-                            {student.fullName || "Unknown"}
-                          </div>
-                          <div className="text-xs text-muted-foreground sm:hidden font-mono">
+              <CardContent className="p-0">
+                <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-background z-10">
+                      <tr className="bg-muted/50 border-b">
+                        <th className="text-left font-semibold px-3 md:px-6 py-3.5 text-sm">
+                          Full Name
+                        </th>
+                        <th className="text-left font-semibold px-3 md:px-6 py-3.5 text-sm">
+                          SAP ID
+                        </th>
+                        <th className="text-right font-semibold px-3 md:px-6 py-3.5 text-sm">
+                          Date & Time
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedStudents.map((student, index) => (
+                        <tr
+                          key={student.id}
+                          className="border-b last:border-0 print-break-inside-avoid hover:bg-muted/30 transition-colors"
+                        >
+                          <td className="px-3 md:px-6 py-3">
+                            <div className="font-medium text-sm">
+                              {student.fullName || "Unknown"}
+                            </div>
+                          </td>
+                          <td className="px-3 md:px-6 py-3 font-mono text-sm text-muted-foreground">
                             {student.sapId}
-                          </div>
+                          </td>
+                          <td className="px-3 md:px-6 py-3 text-right">
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="font-medium text-sm text-foreground">
+                                {new Date(student.createdAt).toLocaleDateString(
+                                  "en-PK",
+                                  {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  }
+                                )}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(student.createdAt).toLocaleTimeString(
+                                  "en-PK",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="sticky bottom-0 bg-background">
+                      <tr className="bg-muted/30 font-semibold border-t-2">
+                        <td
+                          colSpan={2}
+                          className="px-3 md:px-6 py-4 text-left text-sm"
+                        >
+                          Total ({summary.students.length} students):
                         </td>
-                        <td className="px-4 py-2 font-mono hidden sm:table-cell">
-                          {student.sapId}
-                        </td>
-                        <td className="px-4 py-2 text-right font-medium text-emerald-600">
-                          Rs. {summary.stats.ticketPrice}
-                        </td>
-                        <td className="px-4 py-2 text-right text-xs">
-                          <div className="flex flex-col items-end">
-                            <span className="font-medium text-foreground">
-                              {new Date(student.createdAt).toLocaleDateString(
-                                "en-PK",
-                                {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                }
-                              )}
-                            </span>
-                            <span className="text-muted-foreground">
-                              {new Date(student.createdAt).toLocaleTimeString(
-                                "en-PK",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )}
-                            </span>
-                          </div>
+                        <td className="px-3 md:px-6 py-4 text-right text-emerald-600 font-bold text-base">
+                          Rs. {summary.stats.cashCollected.toLocaleString()}
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/30 font-semibold">
-                      <td
-                        colSpan={3}
-                        className="px-4 py-3 text-right sm:hidden"
-                      >
-                        Total:
-                      </td>
-                      <td
-                        colSpan={3}
-                        className="px-4 py-3 text-right hidden sm:table-cell"
-                      >
-                        Total ({summary.students.length} students):
-                      </td>
-                      <td className="px-4 py-3 text-right text-emerald-600 font-bold">
-                        Rs. {summary.stats.cashCollected.toLocaleString()}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </tfoot>
+                  </table>
+                </div>
 
                 {/* Pagination Controls */}
                 {showPagination && (

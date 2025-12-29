@@ -60,7 +60,9 @@ export async function POST(request: NextRequest) {
 
     // 3. Parse and validate input
     const body = await request.json();
-    const parseResult = ScanInputSchema.safeParse(body);
+    const parseResult = ScanInputSchema.extend({
+      isOfflineLog: z.boolean().optional(),
+    }).safeParse(body);
 
     if (!parseResult.success) {
       return NextResponse.json(
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { studentId, code, type } = parseResult.data;
+    const { studentId, code, type, isOfflineLog } = parseResult.data;
 
     // 4. Fetch the student
     const student = await prisma.user.findUnique({
@@ -102,25 +104,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Verify TOTP code
-    if (!student.qrSecret) {
-      return NextResponse.json(
-        { status: "REJECTED", reason: "QR not setup for this student" },
-        { status: 400 }
-      );
-    }
+    // 5. Verify TOTP code (Skip if offline log)
+    if (!isOfflineLog) {
+      if (!student.qrSecret) {
+        return NextResponse.json(
+          { status: "REJECTED", reason: "QR not setup for this student" },
+          { status: 400 }
+        );
+      }
 
-    const isValidCode = verifyToken(student.qrSecret, code);
-    if (!isValidCode) {
-      return NextResponse.json({
-        status: "REJECTED",
-        reason: "Invalid or expired code",
-        student: {
-          name: student.fullName,
-          sapId: student.sapId,
-          photoUrl: student.profilePhotoUrl,
-        },
-      });
+      const isValidCode = verifyToken(student.qrSecret, code);
+      if (!isValidCode) {
+        return NextResponse.json({
+          status: "REJECTED",
+          reason: "Invalid or expired code",
+          student: {
+            name: student.fullName,
+            sapId: student.sapId,
+            photoUrl: student.profilePhotoUrl,
+          },
+        });
+      }
     }
 
     // 6. Check student status
@@ -148,61 +152,75 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 7. Anti-Passback Check: Get last access log
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const lastLog = await prisma.accessLog.findFirst({
-      where: {
-        userId: studentId,
-        timestamp: { gte: todayStart },
-      },
-      orderBy: { timestamp: "desc" },
-      select: { type: true },
+    // 7. Fetch Active Event
+    const activeEvent = await prisma.event.findFirst({
+      where: { isDefault: true },
+      select: { id: true, name: true },
     });
 
-    if (type === "ENTRY") {
-      if (lastLog?.type === "ENTRY") {
-        return NextResponse.json({
-          status: "REJECTED",
-          reason: "Already inside (Anti-Passback)",
-          student: {
-            name: student.fullName,
-            sapId: student.sapId,
-            photoUrl: student.profilePhotoUrl,
-          },
-        });
-      }
-    } else if (type === "EXIT") {
-      if (!lastLog || lastLog.type === "EXIT") {
-        return NextResponse.json({
-          status: "REJECTED",
-          reason: "Not inside - cannot exit",
-          student: {
-            name: student.fullName,
-            sapId: student.sapId,
-            photoUrl: student.profilePhotoUrl,
-          },
-        });
-      }
+    if (!activeEvent) {
+      return NextResponse.json(
+        { status: "REJECTED", reason: "No active event found" },
+        { status: 400 }
+      );
     }
 
-    // 8. Success! Create access log
-    await prisma.accessLog.create({
-      data: {
-        userId: studentId,
-        scannerId: user.id,
-        type: type,
-        status: "GRANTED",
-      },
+    // 8. Transaction: Anti-Passback & Log Creation
+    const result = await prisma.$transaction(async (tx) => {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      // Get last log for this user today
+      const lastLog = await tx.accessLog.findFirst({
+        where: {
+          userId: studentId,
+          timestamp: { gte: todayStart },
+        },
+        orderBy: { timestamp: "desc" },
+        select: { type: true },
+      });
+
+      let status: "GRANTED" | "REJECTED" | "DUPLICATE" = "GRANTED";
+      let reason: string | undefined = undefined;
+      let isReturning = false;
+      let metadata: any = undefined;
+
+      if (type === "ENTRY") {
+        if (lastLog?.type === "ENTRY") {
+          status = "DUPLICATE";
+          reason = "Already inside (Anti-Passback)";
+        } else if (lastLog?.type === "EXIT") {
+          isReturning = true;
+        }
+      } else if (type === "EXIT") {
+        if (!lastLog || lastLog.type === "EXIT") {
+          // Soft Fail: Allow exit but flag it
+          status = "GRANTED"; // Allow them to leave
+          reason = "Unmatched Exit (No Entry Found)";
+          metadata = { warning: "Unmatched Exit" };
+        }
+      }
+
+      // Create Log
+      await tx.accessLog.create({
+        data: {
+          userId: studentId,
+          scannerId: user.id,
+          eventId: activeEvent.id,
+          type: type,
+          status: status,
+          metadata: metadata,
+        },
+      });
+
+      return { status, reason, isReturning };
     });
 
-    // 9. Return success with student details
-    const isReturning = lastLog?.type === "EXIT" && type === "ENTRY";
-
+    // 9. Return result
     return NextResponse.json({
-      status: "GRANTED",
-      isReturning,
+      status: result.status,
+      reason: result.reason,
+      isReturning: result.isReturning,
       student: {
         name: student.fullName,
         sapId: student.sapId,

@@ -29,7 +29,7 @@ export const RejectedResultCard: React.FC<RejectedResultCardProps> = ({
     <View className="bg-white/10 rounded-xl p-4 flex-1">
       {/* Profile Photo for Rejected - Still show for identity */}
       {(profilePhotoUrl || name) && (
-        <View className="items-center mb-3 w-full">
+        <View className="items-center mb-3">
           <ProfileImage
             profilePhotoUrl={profilePhotoUrl}
             name={name}
@@ -37,17 +37,14 @@ export const RejectedResultCard: React.FC<RejectedResultCardProps> = ({
             theme={theme}
             onPress={onImagePress}
           />
-          {/* Name below photo - Explicitly centered and allowed to wrap */}
+          {/* Name below photo */}
           {name && (
-            <View className="w-full mt-2 px-2">
-              <Text
-                className="text-white text-lg font-bold text-center"
-                style={{ fontFamily: "Figtree_700Bold" }}
-                numberOfLines={2}
-              >
-                {name.toUpperCase()}
-              </Text>
-            </View>
+            <Text
+              className="text-white text-base font-bold mt-2"
+              style={{ fontFamily: "Figtree_700Bold" }}
+            >
+              {name.toUpperCase()}
+            </Text>
           )}
         </View>
       )}

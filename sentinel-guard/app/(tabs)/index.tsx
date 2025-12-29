@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -172,92 +172,13 @@ export default function ScannerScreen() {
     }
   };
 
-
-
-  // Check guard status (Function to be reused)
-  const checkGuardStatus = async () => {
-    const session = await getCachedSession();
-    if (session?.userId) {
-      const { data } = await supabase
-        .from("users")
-        .select("is_active")
-        .eq("id", session.userId)
-        .single();
-
-      if (data) {
-        setIsGuardActive(data.is_active);
-        if (!data.is_active) {
-          setIsScanning(false);
-        } else if (!isScanning && !showResult) {
-          setIsScanning(true);
-        }
-      }
-    }
-  };
-
-  // Check on Focus
-  useFocusEffect(
-    useCallback(() => {
-      checkGuardStatus();
-    }, [])
-  );
-
-  // Real-time Subscription
-  useEffect(() => {
-    let subscription: any;
-
-    const setupRealtime = async () => {
-      const session = await getCachedSession();
-      if (!session?.userId) return;
-
-      console.log("Setting up realtime for user:", session.userId);
-
-      subscription = supabase
-        .channel('guard_status_check')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'users',
-            filter: `id=eq.\${session.userId}`,
-          },
-          (payload: any) => {
-            console.log("Realtime update received:", payload);
-            if (payload.new && typeof payload.new.is_active === 'boolean') {
-              const isActive = payload.new.is_active;
-              setIsGuardActive(isActive);
-              if (!isActive) {
-                // IMMEDIATE LOCK
-                setIsScanning(false);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              } else {
-                // UNLOCK
-                setIsScanning(true);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              }
-            }
-          }
-        )
-        .subscribe();
-    };
-
-    setupRealtime();
-
-    return () => {
-      if (subscription) supabase.removeChannel(subscription);
-    };
-  }, []);
-
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (scanLockRef.current || !isScanning || !isGuardActive) return;
+    if (scanLockRef.current || !isScanning) return;
     scanLockRef.current = true;
     setIsScanning(false);
 
-    // INSTANT FEEDBACK: Haptics & Loading Screen
+    // INSTANT FEEDBACK: Haptics
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setScanResult({ status: "LOADING" });
-    setShowResult(true);
 
     try {
       // HYBRID VERIFICATION: Try online, fallback to offline
@@ -529,8 +450,9 @@ export default function ScannerScreen() {
           {/* Flash */}
           <TouchableOpacity
             onPress={() => setFlashEnabled(!flashEnabled)}
-            className={`w-11 h-11 rounded-full items-center justify-center ${flashEnabled ? "bg-secondary" : "bg-black/50"
-              }`}
+            className={`w-11 h-11 rounded-full items-center justify-center ${
+              flashEnabled ? "bg-secondary" : "bg-black/50"
+            }`}
           >
             <Ionicons
               name={flashEnabled ? "flash" : "flash-outline"}
@@ -543,12 +465,14 @@ export default function ScannerScreen() {
           <View className="flex-row bg-black/50 rounded-xl p-1">
             <TouchableOpacity
               onPress={() => setMode("ENTRY")}
-              className={`px-5 py-2 rounded-lg ${mode === "ENTRY" ? "bg-emerald-600" : ""
-                }`}
+              className={`px-5 py-2 rounded-lg ${
+                mode === "ENTRY" ? "bg-emerald-600" : ""
+              }`}
             >
               <Text
-                className={`font-semibold ${mode === "ENTRY" ? "text-white" : "text-gray-100"
-                  }`}
+                className={`font-semibold ${
+                  mode === "ENTRY" ? "text-white" : "text-gray-100"
+                }`}
                 style={{ fontFamily: "Figtree_600SemiBold" }}
               >
                 ENTRY
@@ -556,12 +480,14 @@ export default function ScannerScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setMode("EXIT")}
-              className={`px-5 py-2 rounded-lg ${mode === "EXIT" ? "bg-rose-600" : ""
-                }`}
+              className={`px-5 py-2 rounded-lg ${
+                mode === "EXIT" ? "bg-rose-600" : ""
+              }`}
             >
               <Text
-                className={`font-semibold ${mode === "EXIT" ? "text-white" : "text-gray-100"
-                  }`}
+                className={`font-semibold ${
+                  mode === "EXIT" ? "text-white" : "text-gray-100"
+                }`}
                 style={{ fontFamily: "Figtree_600SemiBold" }}
               >
                 EXIT

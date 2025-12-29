@@ -64,11 +64,12 @@ export async function searchStudents(query: string): Promise<{
   try {
     await requireSuperAdmin();
 
-    if (!query || query.trim().length < 3) {
+    if (!query || query.trim().length < 4) {
       return {
         success: false,
         students: [],
-        message: "Search query must be at least 3 characters",
+        message:
+          "Search query must be at least 4 characters (since first 3 digits of SAP ID are common)",
       };
     }
 
@@ -94,7 +95,7 @@ export async function searchStudents(query: string): Promise<{
 
     const students = await prisma.user.findMany({
       where,
-      take: 20,
+      take: 30, // Reasonable limit for search results
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -366,7 +367,7 @@ export interface StudentDirectoryRow {
 export async function getAllStudents(
   page: number = 1,
   limit: number = 20,
-  filter: "all" | "paid" | "unpaid" = "all"
+  managerSearch: string = ""
 ): Promise<{
   data: StudentDirectoryRow[];
   total: number;
@@ -381,8 +382,12 @@ export async function getAllStudents(
   const skip = (safePage - 1) * safeLimit;
   const where: any = { role: "STUDENT" };
 
-  if (filter === "paid") where.isPaid = true;
-  if (filter === "unpaid") where.isPaid = false;
+  // Filter by manager name if provided
+  if (managerSearch && managerSearch.trim().length > 0) {
+    where.createdBy = {
+      fullName: { contains: managerSearch.trim(), mode: "insensitive" },
+    };
+  }
 
   const [students, total] = await prisma.$transaction([
     prisma.user.findMany({
@@ -612,6 +617,89 @@ export async function manualCheckIn(studentId: string): Promise<ActionResult> {
 }
 
 // ============================================
+// MANUAL CHECK-OUT (Emergency Override)
+// ============================================
+
+/**
+ * Manually check-out a student when scanner fails or phone unavailable.
+ * Creates an EXIT access log with "Manual Override" note.
+ */
+export async function manualCheckOut(studentId: string): Promise<ActionResult> {
+  try {
+    const adminId = await requireSuperAdmin();
+
+    if (!studentId) {
+      return { success: false, message: "Student ID is required" };
+    }
+
+    // Verify target is a student
+    const student = await prisma.user.findUnique({
+      where: { id: studentId },
+      select: { role: true, fullName: true, sapId: true, isActive: true },
+    });
+
+    if (!student) {
+      return { success: false, message: "Student not found" };
+    }
+
+    if (student.role !== "STUDENT") {
+      return { success: false, message: "Target user is not a student" };
+    }
+
+    // Check if student is inside (has recent ENTRY without EXIT)
+    const lastLog = await prisma.accessLog.findFirst({
+      where: { userId: studentId },
+      orderBy: { timestamp: "desc" },
+    });
+
+    if (!lastLog || lastLog.type !== "ENTRY") {
+      return {
+        success: false,
+        message: "Student is not currently checked in",
+      };
+    }
+
+    // Create EXIT access log
+    await prisma.accessLog.create({
+      data: {
+        userId: studentId,
+        type: "EXIT",
+        status: "GRANTED",
+        metadata: { source: "Manual Override - Admin Check-Out" },
+        scannerId: adminId,
+      },
+    });
+
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        performerId: adminId,
+        action: "MANUAL_CHECKOUT",
+        targetId: studentId,
+        details: `Manual check-out for ${student.sapId} (${
+          student.fullName || "Unknown"
+        })`,
+      },
+    });
+
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/live");
+
+    return {
+      success: true,
+      message: `${student.fullName || student.sapId} checked out successfully`,
+    };
+  } catch (error) {
+    console.error("Manual Check-Out Error:", error);
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Failed to check out student",
+    };
+  }
+}
+
+// ============================================
 // EXPORT ATTENDEES CSV
 // ============================================
 
@@ -702,6 +790,273 @@ export async function getAttendeesForExport(): Promise<{
       data: [],
       message:
         error instanceof Error ? error.message : "Failed to export attendees",
+    };
+  }
+}
+
+// ============================================
+// BULK REVOKE STUDENTS
+// ============================================
+
+export interface BulkActionResult {
+  success: boolean;
+  message: string;
+  affectedCount: number;
+  failedIds?: string[];
+}
+
+export async function bulkRevokeStudents(
+  userIds: string[],
+  reason: string
+): Promise<BulkActionResult> {
+  try {
+    const adminId = await requireSuperAdmin();
+
+    if (userIds.length === 0) {
+      return {
+        success: false,
+        message: "No students selected",
+        affectedCount: 0,
+      };
+    }
+
+    if (userIds.length > 100) {
+      return {
+        success: false,
+        message: "Maximum 100 students can be revoked at once",
+        affectedCount: 0,
+      };
+    }
+
+    // Perform bulk update
+    const result = await prisma.user.updateMany({
+      where: {
+        id: { in: userIds },
+        role: "STUDENT",
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    // Create audit log for each revocation
+    await prisma.auditLog.createMany({
+      data: userIds.map((userId) => ({
+        performerId: adminId,
+        targetId: userId,
+        action: "BULK_REVOKE_ACCESS",
+        details: reason || "Bulk revocation by admin",
+      })),
+    });
+
+    revalidatePath("/admin/students");
+
+    return {
+      success: true,
+      message: `Successfully revoked access for ${result.count} students`,
+      affectedCount: result.count,
+    };
+  } catch (error) {
+    console.error("Bulk Revoke Error:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Bulk revoke failed",
+      affectedCount: 0,
+    };
+  }
+}
+
+// ============================================
+// BULK RESTORE STUDENTS
+// ============================================
+
+export async function bulkRestoreStudents(
+  userIds: string[]
+): Promise<BulkActionResult> {
+  try {
+    const adminId = await requireSuperAdmin();
+
+    if (userIds.length === 0) {
+      return {
+        success: false,
+        message: "No students selected",
+        affectedCount: 0,
+      };
+    }
+
+    if (userIds.length > 100) {
+      return {
+        success: false,
+        message: "Maximum 100 students can be restored at once",
+        affectedCount: 0,
+      };
+    }
+
+    const result = await prisma.user.updateMany({
+      where: {
+        id: { in: userIds },
+        role: "STUDENT",
+      },
+      data: {
+        isActive: true,
+      },
+    });
+
+    await prisma.auditLog.createMany({
+      data: userIds.map((userId) => ({
+        performerId: adminId,
+        targetId: userId,
+        action: "BULK_RESTORE_ACCESS",
+        details: "Bulk restoration by admin",
+      })),
+    });
+
+    revalidatePath("/admin/students");
+
+    return {
+      success: true,
+      message: `Successfully restored access for ${result.count} students`,
+      affectedCount: result.count,
+    };
+  } catch (error) {
+    console.error("Bulk Restore Error:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Bulk restore failed",
+      affectedCount: 0,
+    };
+  }
+}
+
+// ============================================
+// BULK MARK AS PAID
+// ============================================
+
+export async function bulkMarkAsPaid(
+  userIds: string[]
+): Promise<BulkActionResult> {
+  try {
+    const adminId = await requireSuperAdmin();
+
+    if (userIds.length === 0) {
+      return {
+        success: false,
+        message: "No students selected",
+        affectedCount: 0,
+      };
+    }
+
+    if (userIds.length > 100) {
+      return {
+        success: false,
+        message: "Maximum 100 students can be updated at once",
+        affectedCount: 0,
+      };
+    }
+
+    const result = await prisma.user.updateMany({
+      where: {
+        id: { in: userIds },
+        role: "STUDENT",
+      },
+      data: {
+        isPaid: true,
+      },
+    });
+
+    await prisma.auditLog.createMany({
+      data: userIds.map((userId) => ({
+        performerId: adminId,
+        targetId: userId,
+        action: "BULK_PAYMENT_OVERRIDE",
+        details: "Bulk payment marked by admin",
+      })),
+    });
+
+    revalidatePath("/admin/students");
+
+    return {
+      success: true,
+      message: `Successfully marked ${result.count} students as paid`,
+      affectedCount: result.count,
+    };
+  } catch (error) {
+    console.error("Bulk Mark Paid Error:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Bulk update failed",
+      affectedCount: 0,
+    };
+  }
+}
+
+// ============================================
+// EXPORT ALL STUDENTS (for CSV download)
+// ============================================
+
+export interface StudentExportRow {
+  sapId: string;
+  fullName: string;
+  gender: string;
+  section: string;
+  semester: string;
+  isPaid: string;
+  isActive: string;
+  profileCompleted: string;
+  createdAt: string;
+  managerName: string;
+}
+
+export async function getAllStudentsForExport(): Promise<{
+  success: boolean;
+  data: StudentExportRow[];
+  message?: string;
+}> {
+  try {
+    await requireSuperAdmin();
+
+    const students = await prisma.user.findMany({
+      where: { role: "STUDENT" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        sapId: true,
+        fullName: true,
+        gender: true,
+        section: true,
+        semester: true,
+        isPaid: true,
+        isActive: true,
+        profileCompleted: true,
+        createdAt: true,
+        createdBy: {
+          select: { fullName: true },
+        },
+      },
+    });
+
+    const exportData: StudentExportRow[] = students.map((s) => ({
+      sapId: s.sapId,
+      fullName: s.fullName || "N/A",
+      gender: s.gender || "N/A",
+      section: s.section || "N/A",
+      semester: s.semester || "N/A",
+      isPaid: s.isPaid ? "Yes" : "No",
+      isActive: s.isActive ? "Active" : "Revoked",
+      profileCompleted: s.profileCompleted ? "Yes" : "No",
+      createdAt: s.createdAt.toISOString().split("T")[0],
+      managerName: s.createdBy?.fullName || "N/A",
+    }));
+
+    return {
+      success: true,
+      data: exportData,
+    };
+  } catch (error) {
+    console.error("Export Students Error:", error);
+    return {
+      success: false,
+      data: [],
+      message: error instanceof Error ? error.message : "Export failed",
     };
   }
 }

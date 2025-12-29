@@ -15,7 +15,7 @@ interface PageProps {
   searchParams: Promise<{
     q?: string;
     page?: string;
-    filter?: "all" | "paid" | "unpaid";
+    manager?: string;
     tab?: string;
   }>;
 }
@@ -34,7 +34,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const query = params.q || "";
   const page = Number(params.page) || 1;
-  const filter = params.filter || "all";
+  const managerSearch = params.manager || "";
 
   // Default tab logic: if query exists, go to search, otherwise overview
   const defaultTab = params.tab || (query ? "search" : "overview");
@@ -42,7 +42,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
   // Fetch data in parallel
   const [stats, directoryData] = await Promise.all([
     getStudentStats(),
-    getAllStudents(page, 20, filter),
+    getAllStudents(page, 20, managerSearch),
   ]);
 
   return (
@@ -93,7 +93,7 @@ export default async function StudentsPage({ searchParams }: PageProps) {
             data={directoryData.data}
             pageCount={directoryData.pageCount}
             currentPage={page}
-            currentFilter={filter}
+            currentManagerSearch={managerSearch}
           />
         </TabsContent>
 

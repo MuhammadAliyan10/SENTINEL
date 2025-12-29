@@ -12,17 +12,15 @@ import {
   CreditCard,
   Lock,
   HelpCircle,
-  Calendar,
-  Shield,
   CheckCircle2,
   XCircle,
   IdCard,
   X,
   ZoomIn,
   Users,
-  Sparkles,
   GraduationCap,
   Users2,
+  ShieldUser,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -60,8 +58,16 @@ export default function ProfileClient({ user, signOut }: ProfileClientProps) {
 
   const displaySection =
     user.section || (user.createdBy ? "See Manager" : "N/A");
-  const displaySemester =
-    user.semester || (user.createdBy ? "See Manager" : "N/A");
+  const displaySemester = user.semester
+    ? (() => {
+        const sem = Number(user.semester);
+        const suffix =
+          sem === 1 ? "st" : sem === 2 ? "nd" : sem === 3 ? "rd" : "th";
+        return `${sem}${suffix}`;
+      })()
+    : user.createdBy
+    ? "See Manager"
+    : "N/A";
 
   return (
     <>
@@ -70,7 +76,7 @@ export default function ProfileClient({ user, signOut }: ProfileClientProps) {
         open={!!selectedImage}
         onOpenChange={() => setSelectedImage(null)}
       >
-        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 border-0 bg-black/95">
+        <DialogContent className="max-w-[95vw] max-h-[90vh] p-0 border-0 bg-black/95">
           <DialogTitle className="sr-only">Image Preview</DialogTitle>
           <button
             onClick={() => setSelectedImage(null)}
@@ -110,7 +116,7 @@ export default function ProfileClient({ user, signOut }: ProfileClientProps) {
           </motion.div>
         </div>
 
-        <div className="max-w-md mx-auto px-4 -mt-14 space-y-4">
+        <div className="max-w-md mx-auto px-4 -mt-24 space-y-4">
           {/* Profile Card - Premium Design */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -129,12 +135,16 @@ export default function ProfileClient({ user, signOut }: ProfileClientProps) {
                     className="relative group"
                     disabled={!user.profilePhotoUrl}
                   >
-                    <Avatar className="h-24 w-24 border-4 border-white shadow-xl ring-4 ring-primary/10">
-                      <AvatarImage src={user.profilePhotoUrl || ""} />
-                      <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/40 text-primary text-2xl font-bold">
+                    <Avatar className="h-24 w-24 border-4 border-white shadow-md ring-2 ring-primary/10">
+                      <AvatarImage
+                        src={user.profilePhotoUrl || ""}
+                        className="object-cover"
+                      />
+                      <AvatarFallback className="bg-primary/20 text-primary text-2xl font-bold">
                         {user.fullName?.charAt(0) || "?"}
                       </AvatarFallback>
                     </Avatar>
+
                     {user.profilePhotoUrl && (
                       <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <ZoomIn className="h-6 w-6 text-white" />
@@ -260,7 +270,7 @@ export default function ProfileClient({ user, signOut }: ProfileClientProps) {
                 {user.createdBy && (
                   <div className="mt-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl p-4 flex items-center gap-3">
                     <div className="p-2 bg-white rounded-lg shadow-sm">
-                      <Shield className="h-5 w-5 text-primary" />
+                      <ShieldUser className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase font-medium tracking-wider">

@@ -31,10 +31,14 @@ interface LiveEntry {
   id: string;
   scanned_at: string;
   status: EntryStatus;
+  type: "ENTRY" | "EXIT";
   location: string;
   full_name: string;
   sap_id: string;
   photo_url: string | null;
+  // NEW: Guard information
+  guard_name: string | null;
+  guard_sap_id: string | null;
 }
 
 function getInitials(name: string): string {
@@ -46,15 +50,32 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-function StatusBadge({ status }: { status: EntryStatus }) {
-  switch (status) {
-    case "allowed":
+function StatusBadge({
+  status,
+  type,
+}: {
+  status: EntryStatus;
+  type: "ENTRY" | "EXIT";
+}) {
+  if (status === "allowed") {
+    if (type === "ENTRY") {
       return (
-        <Badge className="bg-green-100 text-green-700 border-green-200 gap-1">
+        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1">
           <CheckCircle2 className="h-3 w-3" />
           Entered
         </Badge>
       );
+    } else {
+      return (
+        <Badge className="bg-orange-100 text-orange-700 border-orange-200 gap-1">
+          <CheckCircle2 className="h-3 w-3" />
+          Exited
+        </Badge>
+      );
+    }
+  }
+
+  switch (status) {
     case "rejected":
       return (
         <Badge className="bg-red-100 text-red-700 border-red-200 gap-1">
@@ -94,15 +115,37 @@ export function LiveDashboardClient() {
         const response = await fetch("/api/admin/live-scans");
         if (response.ok) {
           const data = await response.json();
+
+          // NEW: Set real-time stats from API instead of starting at 0
+          if (data.stats) {
+            setStats({
+              totalEntered: data.stats.totalEntered,
+              currentlyInside: data.stats.currentlyInside,
+              rejected: data.stats.rejected,
+            });
+          }
+
+          // Debug: Log the API response
+          console.log("Live scans API response:", data.scans.slice(0, 3));
+
           // Transform API data to LiveEntry format
           const initialEntries = data.scans.map((scan: any) => ({
             id: scan.id,
             scanned_at: scan.timestamp,
-            status: scan.status,
+            status:
+              scan.status === "GRANTED"
+                ? "allowed"
+                : scan.status === "REJECTED"
+                ? "rejected"
+                : "re-entry",
+            type: scan.type || "ENTRY", // Fallback to ENTRY if not provided
             location: "Main Gate", // Default for now
             full_name: scan.user.fullName || "Unknown",
-            sap_id: "---", // API might not return SAP ID in the list view, need to check
+            sap_id: scan.user.sapId || "---", // NEW: Now included in API
             photo_url: scan.user.profilePhotoUrl,
+            // NEW: Guard information from API (fixed field name)
+            guard_name: scan.scanner?.fullName || null,
+            guard_sap_id: scan.scanner?.sapId || null,
           }));
           setEntries(initialEntries);
           if (initialEntries.length > 0) {
@@ -146,10 +189,13 @@ export function LiveDashboardClient() {
               id: newRecord.id,
               scanned_at: newRecord.timestamp,
               status: uiStatus,
+              type: newRecord.type as "ENTRY" | "EXIT",
               location: newRecord.gate_number || "Main Gate",
               full_name: (userData as any).full_name || "Unknown",
               sap_id: (userData as any).sap_id,
               photo_url: (userData as any).profile_photo_url,
+              guard_name: null,
+              guard_sap_id: null,
             };
 
             setEntries((prev) => [newEntry, ...prev].slice(0, 50));
@@ -263,7 +309,12 @@ export function LiveDashboardClient() {
           <CardContent>
             <div className="text-lg font-medium">
               {lastScanTime
-                ? new Date(lastScanTime).toLocaleTimeString()
+                ? new Date(lastScanTime).toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                    timeZone: "Asia/Karachi",
+                  })
                 : "--:--"}
             </div>
           </CardContent>
@@ -321,13 +372,27 @@ export function LiveDashboardClient() {
                         </code>
                         <span>•</span>
                         <span>{entry.location}</span>
+                        {/* NEW: Display Guard Name */}
+                        {entry.guard_name && (
+                          <>
+                            <span>•</span>
+                            <span className="text-xs text-primary/70">
+                              Guard: {entry.guard_name}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <StatusBadge status={entry.status} />
+                    <StatusBadge status={entry.status} type={entry.type} />
                     <span className="text-xs text-muted-foreground">
-                      {new Date(entry.scanned_at).toLocaleTimeString()}
+                      {new Date(entry.scanned_at).toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
+                        timeZone: "Asia/Karachi",
+                      })}
                     </span>
                   </div>
                 </div>

@@ -18,6 +18,7 @@ interface ActivityLog {
   id: string;
   timestamp: Date | string;
   status: "GRANTED" | "REJECTED" | "DUPLICATE";
+  type: "ENTRY" | "EXIT";
   gateNumber: number | string | null;
   user: {
     fullName: string | null;
@@ -78,14 +79,27 @@ export function ActivityTable({
     fetchLogs(1, newFilter);
   };
 
-  const getStatusBadge = (status: ActivityLog["status"]) => {
-    switch (status) {
-      case "GRANTED":
+  const getStatusBadge = (
+    status: ActivityLog["status"],
+    type: ActivityLog["type"]
+  ) => {
+    if (status === "GRANTED") {
+      if (type === "ENTRY") {
         return (
-          <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-indigo-50 text-indigo-700">
-            Success
+          <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-emerald-50 text-emerald-700">
+            Entered
           </span>
         );
+      } else {
+        return (
+          <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-orange-50 text-orange-700">
+            Exited
+          </span>
+        );
+      }
+    }
+
+    switch (status) {
       case "REJECTED":
         return (
           <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-red-50 text-red-700">
@@ -119,27 +133,12 @@ export function ActivityTable({
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-      {/* Header with Tabs */}
+      {/* Header */}
       <div className="p-4 border-b border-slate-100">
-        <Tabs
-          value={filter}
-          onValueChange={(v) => handleFilterChange(v as FilterType)}
-        >
-          <TabsList className="bg-slate-100">
-            <TabsTrigger value="all" className="gap-1.5">
-              <List className="h-4 w-4" />
-              All Activity
-            </TabsTrigger>
-            <TabsTrigger value="alerts" className="gap-1.5">
-              <AlertTriangle className="h-4 w-4" />
-              Security Alerts
-            </TabsTrigger>
-            <TabsTrigger value="staff" className="gap-1.5">
-              <Users className="h-4 w-4" />
-              Staff/Reps
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <h3 className="text-lg font-semibold text-slate-900">All Activity</h3>
+        <p className="text-sm text-slate-500 mt-1">
+          Recent access logs and scans
+        </p>
       </div>
 
       {/* Table */}
@@ -234,7 +233,9 @@ export function ActivityTable({
                           : "Main Gate"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">{getStatusBadge(log.status)}</td>
+                    <td className="px-4 py-3">
+                      {getStatusBadge(log.status, log.type)}
+                    </td>
                   </tr>
                 ))}
           </tbody>

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function OfflinePage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-50 to-white p-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-b from-slate-50 to-white p-4">
       <Card className="w-full max-w-md bg-white border-border shadow-xl">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">

@@ -88,86 +88,87 @@ export function LedgerList({ entries }: LedgerListProps) {
         </span>
       </CardHeader>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Student</TableHead>
-              <TableHead className="text-right">Date & Time</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.data.map((entry) => (
-              <TableRow key={entry.id}>
-                <TableCell className="font-medium">
-                  <div>
-                    <span className="font-semibold">
-                      {entry.fullName || "Unknown"}
-                    </span>
-                    <span className="block text-xs text-muted-foreground font-mono mt-0.5">
-                      {entry.sapId}
-                      {entry.activationToken &&
-                        ` • Token: ${entry.activationToken}`}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right text-muted-foreground text-sm">
-                  <div className="flex flex-col items-end">
-                    <span className="font-medium text-foreground">
-                      {new Date(entry.createdAt).toLocaleDateString("en-PK", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                    <span className="text-xs">
-                      {new Date(entry.createdAt).toLocaleTimeString("en-PK", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        disabled={isPending && deletingId === entry.id}
-                      >
-                        {isPending && deletingId === entry.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Student</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete student {entry.sapId}?
-                          This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => handleDelete(entry.id)}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
+        <div className="max-h-[400px] overflow-y-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student</TableHead>
+                <TableHead className="text-right">Date & Time</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {entries.data.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="font-medium">
+                    <div>
+                      <span className="font-semibold">
+                        {entry.fullName?.slice(0, 15) + "..." || "Unknown"}
+                      </span>
+                      <span className="block text-xs text-muted-foreground font-mono mt-0.5">
+                        {entry.sapId}
+                        {entry.activationToken && ` • ${entry.activationToken}`}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">
+                    <div className="flex flex-col items-end">
+                      <span className="font-medium text-foreground">
+                        {new Date(entry.createdAt).toLocaleDateString("en-PK", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                      <span className="text-xs">
+                        {new Date(entry.createdAt).toLocaleTimeString("en-PK", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          disabled={isPending && deletingId === entry.id}
+                        >
+                          {isPending && deletingId === entry.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Student</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete student{" "}
+                            {entry.sapId}? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(entry.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
 
         {/* Pagination Controls */}
         {entries.totalPages > 1 && (

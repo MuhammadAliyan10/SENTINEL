@@ -1,14 +1,11 @@
 import { Suspense } from "react";
 import { requireSuperAdmin } from "@/actions/auth-actions";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  getAllGuards,
-  getGuardStats,
-  getGuardActivity,
-} from "@/actions/guard-actions";
+import { getAllGuards, getGuardStats } from "@/actions/guard-actions";
 import GuardsClient from "@/components/features/admin/guards/GuardsClient";
 import { GuardStatsView } from "@/components/features/admin/guards/GuardStatsView";
-import { GuardActivityLog } from "@/components/features/admin/guards/GuardActivityLog";
+import { GuardActivityLogClient } from "@/components/features/admin/guards/GuardActivityLogClient";
+import { ExportGuardsButton } from "@/components/features/admin/guards/ExportGuardsButton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LayoutDashboard, Activity } from "lucide-react";
@@ -40,10 +37,22 @@ async function GuardsOverview() {
   );
 }
 
-async function ActivityTab() {
-  const activity = await getGuardActivity(50);
-  return <GuardActivityLog activity={activity} />;
-}
+// ================================================================
+// ACTIVITY TAB (NEW: CLIENT-SIDE WITH PAGINATION)
+// ================================================================
+// OLD: Server-side fetch-all approach (commented out below)
+// async function ActivityTab() {
+//   const activity = await getGuardActivity(50);
+//   return <GuardActivityLog activity={activity} />;
+// }
+//
+// ISSUE: Fetched all 50 logs at once, no pagination, cannot access older records.
+//
+// NEW: Client-side component with paginated API calls
+// - Supports pagination (Previous/Next + Page Numbers)
+// - Loading skeleton during fetch
+// - Can scale to thousands of logs
+// - Future-ready for search and filters
 
 // ============================================
 // LOADING SKELETON
@@ -72,11 +81,14 @@ export default async function GuardsPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Security Force</h1>
-        <p className="text-muted-foreground mt-1">
-          Guard accounts and real-time performance monitoring
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Security Force</h1>
+          <p className="text-muted-foreground mt-1">
+            Guard accounts and real-time performance monitoring
+          </p>
+        </div>
+        <ExportGuardsButton />
       </div>
 
       {/* Tabs */}
@@ -107,9 +119,8 @@ export default async function GuardsPage() {
         </TabsContent>
 
         <TabsContent value="activity">
-          <Suspense fallback={<GuardsSkeleton />}>
-            <ActivityTab />
-          </Suspense>
+          {/* NEW: Client-side component with built-in loading states */}
+          <GuardActivityLogClient />
         </TabsContent>
       </Tabs>
     </div>

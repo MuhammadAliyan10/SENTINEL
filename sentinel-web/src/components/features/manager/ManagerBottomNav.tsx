@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, User } from "lucide-react";
+import {
+  LayoutDashboard,
+  FileText,
+  User,
+  FileChartPie,
+  ReceiptText,
+  TicketCheck,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ManagerBottomNav() {
@@ -11,13 +18,13 @@ export function ManagerBottomNav() {
   const links = [
     {
       href: "/manager/dashboard",
-      label: "Dashboard",
-      icon: LayoutDashboard,
+      label: "Issue Pass",
+      icon: TicketCheck,
     },
     {
       href: "/manager/summary",
       label: "Summary",
-      icon: FileText,
+      icon: ReceiptText,
     },
     {
       href: "/manager/profile",

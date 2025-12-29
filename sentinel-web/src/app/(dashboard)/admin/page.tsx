@@ -72,18 +72,52 @@ async function getDashboardData() {
       where: { role: "STUDENT", isPaid: true },
     }),
 
-    // Hourly traffic (last 12 hours)
-    prisma.$queryRaw<{ hour: string; entries: number }[]>`
-      SELECT
-        TO_CHAR(timestamp AT TIME ZONE 'Asia/Karachi', 'HH12 AM') as hour,
-        COUNT(*) as entries
-      FROM "access_logs"
-      WHERE type = 'ENTRY'
-        AND timestamp >= NOW() - INTERVAL '12 hours'
-      GROUP BY TO_CHAR(timestamp AT TIME ZONE 'Asia/Karachi', 'HH12 AM'),
-               DATE_TRUNC('hour', timestamp)
-      ORDER BY DATE_TRUNC('hour', timestamp)
-    `,
+    // ================================================================
+    // HOURLY TRAFFIC (ALL 24 HOURS - 1-HOUR GRANULARITY)
+    // ================================================================
+    // OLD: Only last 12 hours with 12-hour format (e.g., "01 AM", "02 PM")
+    //      This caused gaps and made it look like 3-hour blocks
+    // NEW: All 24 hours of today with 24-hour format (e.g., "00:00", "14:00")
+    //
+    // This provides high-resolution traffic data for accurate peak identification
+    // and efficient guard deployment planning.
+    (async () => {
+      // Fetch all entries for today
+      const logs = await prisma.accessLog.findMany({
+        where: {
+          timestamp: { gte: todayStart },
+          type: "ENTRY",
+          status: "GRANTED",
+        },
+        select: {
+          timestamp: true,
+        },
+      });
+
+      // Create a map for all 24 hours (0-23), initialized to 0
+      const hourlyMap = new Map<number, number>();
+      for (let hour = 0; hour < 24; hour++) {
+        hourlyMap.set(hour, 0);
+      }
+
+      // Count entries per hour - FIXED: Use Pakistan timezone
+      logs.forEach((log) => {
+        // Convert to Pakistan timezone (UTC+5)
+        const pktDate = new Date(
+          log.timestamp.toLocaleString("en-US", {
+            timeZone: "Asia/Karachi",
+          })
+        );
+        const hour = pktDate.getHours();
+        hourlyMap.set(hour, (hourlyMap.get(hour) || 0) + 1);
+      });
+
+      // Convert to array with formatted hour labels
+      return Array.from(hourlyMap.entries()).map(([hour, entries]) => ({
+        hour: `${String(hour).padStart(2, "0")}:00`, // 24-hour format in PKT
+        entries,
+      }));
+    })(),
 
     // Live scans (last 5)
     prisma.accessLog.findMany({
@@ -93,6 +127,7 @@ async function getDashboardData() {
         id: true,
         timestamp: true,
         status: true,
+        type: true,
         user: {
           select: {
             fullName: true,
@@ -110,6 +145,7 @@ async function getDashboardData() {
         id: true,
         timestamp: true,
         status: true,
+        type: true,
         gateNumber: true,
         user: {
           select: {
@@ -126,6 +162,7 @@ async function getDashboardData() {
     prisma.accessLog.count(),
   ]);
 
+  // Calculate revenue using dynamic ticket price from DB
   const revenue = paidCount * ticketPrice;
 
   return {
@@ -136,10 +173,7 @@ async function getDashboardData() {
       securityAlerts,
       revenue,
     },
-    hourlyTraffic: hourlyTraffic.map((h) => ({
-      hour: h.hour,
-      entries: Number(h.entries),
-    })),
+    hourlyTraffic, // NEW: No mapping needed, already in correct format
     liveScans,
     activityLogs,
     activityTotal,

@@ -81,7 +81,7 @@ export default function StudentDashboard() {
   // Transform data to match DigitalPass props
   const initialQrData = {
     payload: data.qrCode,
-    expiresAt: data.timestamp + 5 * 60 * 1000, // 5 minutes
+    expiresAt: data.timestamp + 2 * 60 * 1000, // 2 minutes (matches mobile app)
   };
 
   return <DigitalPass user={data.user} initialQrData={initialQrData} />;

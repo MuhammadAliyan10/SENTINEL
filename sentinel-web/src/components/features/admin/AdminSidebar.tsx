@@ -119,7 +119,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-transparent"
             >
-              <div className="flex aspect-square size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="flex aspect-square size-10 items-center justify-center rounded-xl">
                 <img
                   src="/Logo.png"
                   alt="Sentinel"
@@ -129,9 +129,6 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-bold text-lg tracking-tight text-foreground">
                   Sentinel
-                </span>
-                <span className="truncate text-xs font-medium text-muted-foreground">
-                  Admin Console
                 </span>
               </div>
             </SidebarMenuButton>

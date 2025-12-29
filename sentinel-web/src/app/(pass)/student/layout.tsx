@@ -26,7 +26,7 @@ export default function StudentLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white pb-20">
+    <div className="min-h-screen bg-linear-to-b from-slate-50 to-white pb-20">
       {children}
       <StudentBottomNav />
     </div>

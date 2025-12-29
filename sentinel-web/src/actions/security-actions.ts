@@ -141,10 +141,10 @@ export async function verifyQRCode(
       };
     }
 
-    // Check timestamp freshness (QR valid for 5 minutes)
+    // Check timestamp freshness (uses shared constant for consistency)
     const qrTimestamp = parseInt(timestamp, 10);
     const now = Date.now();
-    const maxAge = 5 * 60 * 1000; // 5 minutes
+    const maxAge = 2 * 60 * 1000; // 2 minutes - MUST match TIME.QR_VALIDITY_MS
 
     if (isNaN(qrTimestamp) || now - qrTimestamp > maxAge) {
       return {

@@ -6,6 +6,7 @@ import {
   restoreStudentAccess,
   manualPaymentOverride,
   manualCheckIn,
+  manualCheckOut,
 } from "@/actions/students-actions";
 import {
   Card,
@@ -51,6 +52,7 @@ import {
   DollarSign,
   Loader2,
   UserCheck,
+  UserMinus,
   MoreVertical,
   History,
   ArrowLeft,
@@ -92,6 +94,7 @@ interface Student {
   accessLogs: {
     id: string;
     timestamp: Date;
+    type: string;
     status: string;
     gateNumber: string | null;
     scanner: {
@@ -166,6 +169,21 @@ export function StudentProfile({ student }: StudentProfileProps) {
       }
     });
   };
+
+  const handleManualCheckOut = () => {
+    startTransition(async () => {
+      const result = await manualCheckOut(student.id);
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    });
+  };
+
+  // Determine if student is currently inside (last log is ENTRY)
+  const lastLog = student.accessLogs[0];
+  const isInsideVenue = lastLog?.type === "ENTRY";
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -256,21 +274,36 @@ export function StudentProfile({ student }: StudentProfileProps) {
 
         {/* Action Toolbar */}
         <div className="flex gap-2">
-          {student.isActive && (
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={handleManualCheckIn}
-              disabled={isPending}
-            >
-              {isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <UserCheck className="h-4 w-4 text-emerald-600" />
-              )}
-              Check-In
-            </Button>
-          )}
+          {student.isActive &&
+            (isInsideVenue ? (
+              <Button
+                variant="outline"
+                className="gap-2 border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700"
+                onClick={handleManualCheckOut}
+                disabled={isPending}
+              >
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserMinus className="h-4 w-4" />
+                )}
+                Check-Out
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="gap-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700"
+                onClick={handleManualCheckIn}
+                disabled={isPending}
+              >
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UserCheck className="h-4 w-4" />
+                )}
+                Check-In
+              </Button>
+            ))}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

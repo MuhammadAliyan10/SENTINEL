@@ -1,9 +1,26 @@
 import CryptoJS from "crypto-js";
+import { TIME } from "../lib/constants";
 
 export interface QrPayload {
   sap: string;
   ts: number;
   sig: string;
+}
+
+/**
+ * Timing-safe string comparison (prevents timing attacks)
+ * Uses constant-time XOR comparison algorithm.
+ * In React Native, we can't use Node's timingSafeEqual,
+ * so we implement our own constant-time comparison.
+ */
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 /**
@@ -28,8 +45,10 @@ export function parseQrData(data: string): QrPayload | null {
  * Logic:
  * 1. Construct data string: `${sap}:${ts}`
  * 2. Hash using the User's Secret (activation_token).
- * 3. Compare with the provided signature.
- * 4. Check if timestamp is within the allowed window (10 mins).
+ * 3. Compare with the provided signature (TIMING-SAFE).
+ * 4. Check if timestamp is within the allowed window.
+ *
+ * SECURITY: Uses timing-safe comparison to prevent timing attacks.
  */
 export function verifyQrSignature(payload: QrPayload, secret: string): boolean {
   try {
@@ -42,7 +61,6 @@ export function verifyQrSignature(payload: QrPayload, secret: string): boolean {
     }
 
     // 2. Construct Data String
-    // Crucial: Ensure ts is treated as a string in the concatenation
     const dataString = `${payload.sap}:${payload.ts}`;
 
     // 3. Calculate HMAC-SHA256
@@ -54,15 +72,16 @@ export function verifyQrSignature(payload: QrPayload, secret: string): boolean {
     if (__DEV__) {
       console.log("--- SECURITY CHECK (DEV) ---");
       console.log("Hashing String:", dataString);
-      console.log(
-        "Sig Match:",
-        calculatedSig.toLowerCase() === payload.sig.toLowerCase()
-      );
       console.log("----------------------------");
     }
 
-    // 5. Compare Signatures (Case-insensitive)
-    if (calculatedSig.toLowerCase() !== payload.sig.toLowerCase()) {
+    // 5. TIMING-SAFE Compare Signatures (prevents timing attacks)
+    const sigMatch = safeCompare(
+      calculatedSig.toLowerCase(),
+      payload.sig.toLowerCase()
+    );
+
+    if (!sigMatch) {
       if (__DEV__) {
         console.warn("SECURITY FAIL: Signature Mismatch");
       }
@@ -71,17 +90,14 @@ export function verifyQrSignature(payload: QrPayload, secret: string): boolean {
 
     // === TIMESTAMP VALIDATION (SECURITY CRITICAL) ===
     // Check if QR code is within the allowed validity window
-    // SYNC WITH WEB API: Both must use the same expiration time
+    // Uses shared constant to ensure sync with web API
     const now = Date.now();
     const diff = Math.abs(now - payload.ts);
 
-    // OLD: const ALLOWED_WINDOW = 5 * 60 * 1000; // 5 minutes (SECURITY RISK: Allowed passback attacks)
-    const ALLOWED_WINDOW = 2 * 60 * 1000; // SECURITY FIX: 2 minutes (Matches Web API, prevents QR reuse)
-
-    if (diff > ALLOWED_WINDOW) {
+    if (diff > TIME.QR_VALIDITY_MS) {
       if (__DEV__) {
         console.warn(
-          `SECURITY FAIL: Expired. Diff: ${diff}ms, Allowed: ${ALLOWED_WINDOW}ms`
+          `SECURITY FAIL: Expired. Diff: ${diff}ms, Allowed: ${TIME.QR_VALIDITY_MS}ms`
         );
       }
       return false;

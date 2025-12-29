@@ -25,6 +25,7 @@ export default function TabsLayout() {
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: "600",
+          fontFamily: "Figtree_600SemiBold",
         },
       }}
     >

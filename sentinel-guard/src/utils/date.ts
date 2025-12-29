@@ -4,65 +4,82 @@
  * We force UTC interpretation if no timezone info is present.
  */
 export const parseAsUTC = (timestamp: string): Date => {
-    if (!timestamp) return new Date();
-    // If timestamp doesn't end with Z or timezone offset, treat as UTC
-    if (!timestamp.endsWith("Z") && !timestamp.includes("+")) {
-        return new Date(timestamp + "Z");
-    }
-    return new Date(timestamp);
+  if (!timestamp) return new Date();
+  // If timestamp doesn't end with Z or timezone offset, treat as UTC
+  if (!timestamp.endsWith("Z") && !timestamp.includes("+")) {
+    return new Date(timestamp + "Z");
+  }
+  return new Date(timestamp);
 };
 
 /**
- * Formats a timestamp to "HH:MM AM/PM" in the device's local timezone.
+ * Formats a timestamp to "HH:MM AM/PM" in Pakistan timezone.
  */
 export const formatTime = (timestamp: string): string => {
-    try {
-        const date = parseAsUTC(timestamp);
-        if (isNaN(date.getTime())) return "--:--";
+  try {
+    const date = parseAsUTC(timestamp);
+    if (isNaN(date.getTime())) return "--:--";
 
-        let hours = date.getHours();
-        const minutes = date.getMinutes();
-        const ampm = hours >= 12 ? "PM" : "AM";
-        hours = hours % 12;
-        hours = hours ? hours : 12; // 0 becomes 12
-
-        const hoursStr = hours.toString().padStart(2, "0");
-        const minutesStr = minutes.toString().padStart(2, "0");
-
-        return `${hoursStr}:${minutesStr} ${ampm}`;
-    } catch {
-        return "--:--";
-    }
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Karachi",
+    });
+  } catch {
+    return "--:--";
+  }
 };
 
 /**
- * Formats a timestamp to "Today", "Yesterday", or "MMM DD"
+ * Formats a timestamp to "Today", "Yesterday", or "MMM DD" in Pakistan timezone
  */
 export const formatDate = (timestamp: string): string => {
-    try {
-        const date = parseAsUTC(timestamp);
-        if (isNaN(date.getTime())) return "";
+  try {
+    const date = parseAsUTC(timestamp);
+    if (isNaN(date.getTime())) return "";
 
-        const now = new Date();
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
+    // Get dates in Pakistan timezone for comparison
+    const pktDateStr = date.toLocaleString("en-US", {
+      timeZone: "Asia/Karachi",
+    });
+    const pktDate = new Date(pktDateStr);
 
-        // Compare simple date strings
-        const toDateString = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const nowStr = new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Karachi",
+    });
+    const now = new Date(nowStr);
 
-        const dateStr = toDateString(date);
-        const todayStr = toDateString(now);
-        const yesterdayStr = toDateString(yesterday);
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
 
-        if (dateStr === todayStr) return "Today";
-        if (dateStr === yesterdayStr) return "Yesterday";
+    // Compare simple date strings
+    const toDateString = (d: Date) =>
+      `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
-        const months = [
-            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-        ];
-        return `${months[date.getMonth()]} ${date.getDate()}`;
-    } catch {
-        return "";
-    }
+    const dateStr = toDateString(pktDate);
+    const todayStr = toDateString(now);
+    const yesterdayStr = toDateString(yesterday);
+
+    if (dateStr === todayStr) return "Today";
+    if (dateStr === yesterdayStr) return "Yesterday";
+
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    return `${months[pktDate.getMonth()]} ${pktDate.getDate()}`;
+  } catch {
+    return "";
+  }
 };

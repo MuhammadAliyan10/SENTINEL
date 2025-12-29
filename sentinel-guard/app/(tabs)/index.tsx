@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,26 +7,35 @@ import {
   Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import ResultOverlay from "../../components/ResultOverlay";
+import { verifyQrHybrid, VerifyResponse } from "../../src/lib/api";
 import {
+  supabase,
   getUserBySapId,
   getRecentAccessLog,
   getStudentActivityLogs,
   insertAccessLog,
+  getCachedSession,
   DatabaseError,
-  AccessLogEntry,
 } from "../../src/lib/supabase";
 import { verifyQrSignature, parseQrData } from "../../src/utils/security";
 import { syncOfflineLogs } from "../../src/lib/offline";
 
 const { width } = Dimensions.get("window");
-const FRAME_SIZE = width * 0.65;
-const CORNER_SIZE = 40;
-const CORNER_WIDTH = 4;
+const FRAME_SIZE = width * 0.75; // Larger scanning area
 
 type ScanMode = "ENTRY" | "EXIT";
 type ScanResult = {
@@ -38,8 +47,8 @@ type ScanResult = {
   section?: string;
   profilePhotoUrl?: string | null;
   reason?: string;
-  // Duplicate details
   recentLogs?: any[]; // Full history
+  verifiedOffline?: boolean;
 };
 
 export default function ScannerScreen() {
@@ -51,99 +60,253 @@ export default function ScannerScreen() {
   const [mode, setMode] = useState<ScanMode>("ENTRY");
   const [isScanning, setIsScanning] = useState(true);
   const [flashEnabled, setFlashEnabled] = useState(false);
+
   const [showResult, setShowResult] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [isGuardActive, setIsGuardActive] = useState(true); // Default to true while checking
 
   // Ref for synchronous scan lock (prevents race conditions)
   const scanLockRef = useRef(false);
 
+  // Offline verification logic (fallback)
+  const offlineVerify = async (
+    qrData: string
+  ): Promise<VerifyResponse | null> => {
+    try {
+      const payload = parseQrData(qrData);
+      if (!payload) return null;
+
+      const user = await getUserBySapId(payload.sap);
+
+      // Map database errors/status to VerifyResponse
+      if (!user) {
+        return { success: false, status: "REJECTED", reason: "ID Not Found" };
+      }
+      if (!user.is_paid) {
+        return {
+          success: false,
+          status: "REJECTED",
+          reason: "Payment Pending",
+          student: {
+            id: user.id,
+            sapId: user.sap_id,
+            fullName: user.full_name,
+            section: user.section,
+            semester: user.semester,
+            profilePhotoUrl: user.profile_photo_url,
+          },
+        };
+      }
+      if (!user.is_active) {
+        return {
+          success: false,
+          status: "REJECTED",
+          reason: "Pass Deactivated",
+        };
+      }
+
+      // HMAC Verification (Offline)
+      if (
+        !user.activation_token ||
+        !verifyQrSignature(payload, user.activation_token)
+      ) {
+        return {
+          success: false,
+          status: "REJECTED",
+          reason: "Invalid Signature",
+        };
+      }
+
+      // Duplicate Check (Offline)
+      const lastLog = await getRecentAccessLog(user.id);
+      if (mode === "ENTRY" && lastLog?.type === "ENTRY") {
+        return {
+          success: false,
+          status: "DUPLICATE",
+          reason: "Already Inside",
+          student: {
+            id: user.id,
+            sapId: user.sap_id,
+            fullName: user.full_name,
+            section: user.section,
+            semester: user.semester,
+            profilePhotoUrl: user.profile_photo_url,
+          },
+        };
+      }
+      if (mode === "EXIT" && (!lastLog || lastLog.type === "EXIT")) {
+        return {
+          success: false,
+          status: "DUPLICATE",
+          reason: "Not Inside",
+          student: {
+            id: user.id,
+            sapId: user.sap_id,
+            fullName: user.full_name,
+            section: user.section,
+            semester: user.semester,
+            profilePhotoUrl: user.profile_photo_url,
+          },
+        };
+      }
+
+      // Log locally
+      await insertAccessLog(user.id, mode, "GRANTED");
+
+      return {
+        success: true,
+        status: "GRANTED",
+        isReturning: lastLog?.type === "EXIT",
+        student: {
+          id: user.id,
+          sapId: user.sap_id,
+          fullName: user.full_name,
+          section: user.section,
+          semester: user.semester,
+          profilePhotoUrl: user.profile_photo_url,
+        },
+      };
+    } catch (e) {
+      console.error("[Offline] Verification failed:", e);
+      return null;
+    }
+  };
+
+
+
+  // Check guard status (Function to be reused)
+  const checkGuardStatus = async () => {
+    const session = await getCachedSession();
+    if (session?.userId) {
+      const { data } = await supabase
+        .from("users")
+        .select("is_active")
+        .eq("id", session.userId)
+        .single();
+
+      if (data) {
+        setIsGuardActive(data.is_active);
+        if (!data.is_active) {
+          setIsScanning(false);
+        } else if (!isScanning && !showResult) {
+          setIsScanning(true);
+        }
+      }
+    }
+  };
+
+  // Check on Focus
+  useFocusEffect(
+    useCallback(() => {
+      checkGuardStatus();
+    }, [])
+  );
+
+  // Real-time Subscription
+  useEffect(() => {
+    let subscription: any;
+
+    const setupRealtime = async () => {
+      const session = await getCachedSession();
+      if (!session?.userId) return;
+
+      console.log("Setting up realtime for user:", session.userId);
+
+      subscription = supabase
+        .channel('guard_status_check')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'users',
+            filter: `id=eq.\${session.userId}`,
+          },
+          (payload: any) => {
+            console.log("Realtime update received:", payload);
+            if (payload.new && typeof payload.new.is_active === 'boolean') {
+              const isActive = payload.new.is_active;
+              setIsGuardActive(isActive);
+              if (!isActive) {
+                // IMMEDIATE LOCK
+                setIsScanning(false);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              } else {
+                // UNLOCK
+                setIsScanning(true);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+            }
+          }
+        )
+        .subscribe();
+    };
+
+    setupRealtime();
+
+    return () => {
+      if (subscription) supabase.removeChannel(subscription);
+    };
+  }, []);
+
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    // Synchronous check (useRef is immediate, useState is async)
-    if (scanLockRef.current || !isScanning) return;
+    if (scanLockRef.current || !isScanning || !isGuardActive) return;
     scanLockRef.current = true;
     setIsScanning(false);
 
+    // INSTANT FEEDBACK: Haptics & Loading Screen
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setScanResult({ status: "LOADING" });
+    setShowResult(true);
+
     try {
-      // Parse QR
-      const payload = parseQrData(data);
-      if (!payload) throw new Error("Invalid QR Code");
+      // HYBRID VERIFICATION: Try online, fallback to offline
+      const result = await verifyQrHybrid(data, mode, offlineVerify);
 
-      // Fetch User
-      const user = await getUserBySapId(payload.sap);
-
-      // Validate
-      if (!user.is_paid) throw new Error("Payment Pending");
-      if (!user.is_active) throw new Error("Pass Deactivated");
-      if (!user.activation_token) throw new Error("No Token");
-
-      // Verify Signature
-      const isValid = verifyQrSignature(payload, user.activation_token);
-      if (!isValid) throw new Error("Invalid Signature");
-
-      // Check Double Entry
-      const lastLog = await getRecentAccessLog(user.id);
-      let isReturning = false;
-      let duplicateError: string | null = null;
-
-      if (mode === "ENTRY") {
-        if (lastLog?.type === "ENTRY") {
-          duplicateError = "Already Inside";
-        }
-        if (lastLog?.type === "EXIT") isReturning = true;
-      } else {
-        if (!lastLog || lastLog.type === "EXIT") {
-          duplicateError = "Not Inside"; // Or "Already Outside"
-        }
-      }
-
-      if (duplicateError) {
-        // Show detailed duplicate error (with history)
-        // If "Already Inside", show previous ENTRY logs
-        // If "Not Inside", show previous EXIT logs
-        const filterType = duplicateError === "Already Inside" ? "ENTRY" : "EXIT";
-        const recentLogs = await getStudentActivityLogs(user.id, 100, filterType);
-
+      if (!result.success) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
+        // Handle duplicates with history - filter by type
+        let recentLogs = undefined;
+        if (result.status === "DUPLICATE" && result.student?.id) {
+          // Already Inside = show all ENTRY logs, Already Outside = show all EXIT logs
+          const filterType =
+            result.reason === "Already Inside" ? "ENTRY" : "EXIT";
+          recentLogs = await getStudentActivityLogs(
+            result.student.id,
+            10,
+            filterType
+          );
+        }
+
         setScanResult({
           status: "REJECTED",
-          reason: duplicateError,
-          name: user.full_name,
-          profilePhotoUrl: user.profile_photo_url,
-          // Pass duplicate details
-          recentLogs: recentLogs
+          reason: result.reason || "Access Denied",
+          name: result.student?.fullName || undefined,
+          profilePhotoUrl: result.student?.profilePhotoUrl,
+          recentLogs,
+          verifiedOffline: result.verifiedOffline,
         });
         setShowResult(true);
         return;
       }
 
-      // Log
-      const logged = await insertAccessLog(user.id, mode, "GRANTED");
-      if (!logged) throw new Error("Log Failed");
-
       // Success
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setScanResult({
         status: "APPROVED",
-        isReturning,
-        name: user.full_name,
-        sapId: user.sap_id,
-        semester: user.semester,
-        section: user.section,
-        profilePhotoUrl: user.profile_photo_url,
+        isReturning: result.isReturning,
+        name: result.student?.fullName || undefined,
+        sapId: result.student?.sapId,
+        semester: result.student?.semester,
+        section: result.student?.section,
+        profilePhotoUrl: result.student?.profilePhotoUrl,
+        verifiedOffline: result.verifiedOffline,
       });
       setShowResult(true);
     } catch (error: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       let reason = error.message || "Unknown Error";
-      if (error instanceof DatabaseError) {
-        const map: Record<string, string> = {
-          NO_SESSION: "Not Logged In",
-          NETWORK: "Network Error",
-          PERMISSION: "DB Permission Error",
-          NOT_FOUND: "ID Not Found",
-        };
-        reason = map[error.code] || reason;
-      }
       setScanResult({ status: "REJECTED", reason });
       setShowResult(true);
     }
@@ -154,57 +317,114 @@ export default function ScannerScreen() {
     setScanResult(null);
     setTimeout(() => {
       scanLockRef.current = false; // Reset lock for next scan
-      setIsScanning(true);
+
+      if (isGuardActive) {
+        setIsScanning(true);
+      }
     }, 200);
   };
 
-  // Corner component
+  // Corner component with rounded edges and heartbeat animation - Expo style
   const Corner = ({ position }: { position: "tl" | "tr" | "bl" | "br" }) => {
-    const color = mode === "ENTRY" ? "#10B981" : "#6366F1";
-    const styles: any = {
-      position: "absolute",
-      width: CORNER_SIZE,
-      height: CORNER_SIZE,
-    };
-    if (position.includes("t")) styles.top = 0;
-    if (position.includes("b")) styles.bottom = 0;
-    if (position.includes("l")) styles.left = 0;
-    if (position.includes("r")) styles.right = 0;
+    const color = mode === "ENTRY" ? "#FFFFFF" : "#DC2626"; // White for ENTRY, Red for EXIT
 
-    return (
-      <View style={styles}>
-        {/* Horizontal bar */}
-        <View
-          style={{
-            position: "absolute",
-            height: CORNER_WIDTH,
-            width: CORNER_SIZE,
-            backgroundColor: color,
-            borderRadius: 2,
-            ...(position.includes("t") ? { top: 0 } : { bottom: 0 }),
-            ...(position.includes("l") ? { left: 0 } : { right: 0 }),
-          }}
-        />
-        {/* Vertical bar */}
-        <View
-          style={{
-            position: "absolute",
-            width: CORNER_WIDTH,
-            height: CORNER_SIZE,
-            backgroundColor: color,
-            borderRadius: 2,
-            ...(position.includes("t") ? { top: 0 } : { bottom: 0 }),
-            ...(position.includes("l") ? { left: 0 } : { right: 0 }),
-          }}
-        />
-      </View>
-    );
+    // Heartbeat animation
+    const scale = useSharedValue(1);
+
+    useEffect(() => {
+      scale.value = withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 300, easing: Easing.ease }),
+          withTiming(1, { duration: 300, easing: Easing.ease }),
+          withTiming(1.08, { duration: 300, easing: Easing.ease }),
+          withTiming(1, { duration: 500, easing: Easing.ease })
+        ),
+        -1, // infinite
+        false
+      );
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => {
+      return {
+        transform: [{ scale: scale.value }],
+      };
+    });
+
+    // Dynamic styles for the corner
+    const getCornerStyle = () => {
+      const baseStyle: any = {
+        position: "absolute",
+        width: 60, // Wider to match image
+        height: 60,
+        borderColor: color,
+        borderWidth: 8, // Thicker stroke
+        borderRadius: 30, // Very rounded
+      };
+
+      // Hide borders that shouldn't be visible for this corner to create the L-shape
+      if (position === "tl") {
+        return {
+          ...baseStyle,
+          top: 0,
+          left: 0,
+          borderRightWidth: 0,
+          borderBottomWidth: 0,
+          borderTopRightRadius: 0,
+          borderBottomLeftRadius: 0,
+          borderBottomRightRadius: 0,
+        };
+      }
+      if (position === "tr") {
+        return {
+          ...baseStyle,
+          top: 0,
+          right: 0,
+          borderLeftWidth: 0,
+          borderBottomWidth: 0,
+          borderTopLeftRadius: 0,
+          borderBottomLeftRadius: 0,
+          borderBottomRightRadius: 0,
+        };
+      }
+      if (position === "bl") {
+        return {
+          ...baseStyle,
+          bottom: 0,
+          left: 0,
+          borderRightWidth: 0,
+          borderTopWidth: 0,
+          borderTopRightRadius: 0,
+          borderTopLeftRadius: 0,
+          borderBottomRightRadius: 0,
+        };
+      }
+      if (position === "br") {
+        return {
+          ...baseStyle,
+          bottom: 0,
+          right: 0,
+          borderLeftWidth: 0,
+          borderTopWidth: 0,
+          borderTopRightRadius: 0,
+          borderTopLeftRadius: 0,
+          borderBottomLeftRadius: 0,
+        };
+      }
+      return baseStyle;
+    };
+
+    return <Animated.View style={[getCornerStyle(), animatedStyle]} />;
   };
 
   if (!permission) {
     return (
       <View className="flex-1 bg-primary items-center justify-center">
-        <Text className="text-white">Loading...</Text>
+        <Text
+          className="text-white"
+          style={{ fontFamily: "Figtree_400Regular" }}
+        >
+          Loading...
+        </Text>
       </View>
     );
   }
@@ -214,18 +434,79 @@ export default function ScannerScreen() {
       <SafeAreaView className="flex-1 bg-primary items-center justify-center px-8">
         <StatusBar style="light" />
         <Ionicons name="camera-outline" size={64} color="#FF9C01" />
-        <Text className="text-white text-lg font-bold mt-4 mb-2">
+        <Text
+          className="text-white text-lg font-bold mt-4 mb-2"
+          style={{ fontFamily: "Figtree_700Bold" }}
+        >
           Camera Access
         </Text>
-        <Text className="text-gray-100 text-center mb-6">
+        <Text
+          className="text-gray-100 text-center mb-6"
+          style={{ fontFamily: "Figtree_400Regular" }}
+        >
           Required to scan QR codes
         </Text>
         <TouchableOpacity
           onPress={requestPermission}
           className="bg-secondary px-6 py-3 rounded-xl"
         >
-          <Text className="text-primary font-bold">Grant Access</Text>
+          <Text
+            className="text-primary font-bold"
+            style={{ fontFamily: "Figtree_700Bold" }}
+          >
+            Grant Access
+          </Text>
         </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isGuardActive) {
+    return (
+      <SafeAreaView className="flex-1 bg-primary">
+        <StatusBar style="light" />
+
+        {/* Standard App Header */}
+        <View className="px-4 py-4 bg-black-100 border-b border-black-200">
+          <View>
+            <Text
+              className="text-white text-2xl font-bold"
+              style={{ fontFamily: "Figtree_800ExtraBold" }}
+            >
+              Sentinel Guard
+            </Text>
+            <Text
+              className="text-gray-100 text-sm"
+              style={{ fontFamily: "Figtree_400Regular" }}
+            >
+              System Status
+            </Text>
+          </View>
+        </View>
+
+        {/* Main Content */}
+        <View className="flex-1 items-center justify-center px-6">
+          {/* Icon with subtle background */}
+          <View className="w-24 h-24 bg-red-500/10 rounded-full items-center justify-center mb-6 border border-red-500/20">
+            <Ionicons name="ban" size={48} color="#EF4444" />
+          </View>
+
+          <Text
+            className="text-white text-2xl font-bold mb-3 text-center"
+            style={{ fontFamily: "Figtree_700Bold" }}
+          >
+            Account Deactivated
+          </Text>
+
+          <Text
+            className="text-gray-100 text-center text-base leading-6 px-4"
+            style={{ fontFamily: "Figtree_400Regular" }}
+          >
+            Your access has been restricted by the administrator.
+            {"\n"}
+            Please contact support to restore access.
+          </Text>
+        </View>
       </SafeAreaView>
     );
   }
@@ -268,18 +549,20 @@ export default function ScannerScreen() {
               <Text
                 className={`font-semibold ${mode === "ENTRY" ? "text-white" : "text-gray-100"
                   }`}
+                style={{ fontFamily: "Figtree_600SemiBold" }}
               >
                 ENTRY
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setMode("EXIT")}
-              className={`px-5 py-2 rounded-lg ${mode === "EXIT" ? "bg-indigo-600" : ""
+              className={`px-5 py-2 rounded-lg ${mode === "EXIT" ? "bg-rose-600" : ""
                 }`}
             >
               <Text
                 className={`font-semibold ${mode === "EXIT" ? "text-white" : "text-gray-100"
                   }`}
+                style={{ fontFamily: "Figtree_600SemiBold" }}
               >
                 EXIT
               </Text>
@@ -301,7 +584,12 @@ export default function ScannerScreen() {
             <Corner position="bl" />
             <Corner position="br" />
           </View>
-          <Text className="text-white/60 text-sm mt-4">Point at QR Code</Text>
+          <Text
+            className="text-white/60 text-sm mt-4"
+            style={{ fontFamily: "Figtree_400Regular" }}
+          >
+            Point at QR Code
+          </Text>
         </View>
       </SafeAreaView>
 

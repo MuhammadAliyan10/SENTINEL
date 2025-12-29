@@ -8,13 +8,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import { supabase } from "../src/lib/supabase";
+import {
+  supabase,
+  getGuardLoginStatus,
+  incrementFailedLogin,
+  resetLoginAttempts,
+} from "../src/lib/supabase";
 
 // Valid roles that can use the Guard app
 const AUTHORIZED_ROLES = ["GUARD", "SUPER_ADMIN"];
@@ -39,18 +45,19 @@ export default function LoginScreen() {
   const [lockoutRemaining, setLockoutRemaining] = useState<number>(0);
 
   // Check lockout status on mount and periodically
+  // Uses AsyncStorage as UX cache, but actual enforcement is server-side
   useEffect(() => {
     const checkLockout = async () => {
-      const data = await getRateLimitData();
-      if (data.lockoutUntil) {
-        const remaining = data.lockoutUntil - Date.now();
-        if (remaining > 0) {
-          setLockoutRemaining(Math.ceil(remaining / 1000 / 60));
-        } else {
-          // Lockout expired, reset
-          await resetRateLimit();
-          setLockoutRemaining(0);
-        }
+      // First check local cache for instant UI feedback
+      const localData = await getRateLimitData();
+      if (localData.lockoutUntil && localData.lockoutUntil > Date.now()) {
+        setLockoutRemaining(
+          Math.ceil((localData.lockoutUntil - Date.now()) / 1000 / 60)
+        );
+      } else if (localData.lockoutUntil) {
+        // Local lockout expired, clear it
+        await resetRateLimit();
+        setLockoutRemaining(0);
       }
     };
 
@@ -107,18 +114,28 @@ export default function LoginScreen() {
       return;
     }
 
-    // Check if locked out
-    const rateData = await getRateLimitData();
-    if (rateData.lockoutUntil && rateData.lockoutUntil > Date.now()) {
-      const mins = Math.ceil((rateData.lockoutUntil - Date.now()) / 1000 / 60);
-      setError(`Account locked. Try again in ${mins} minutes.`);
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
     try {
+      // Step 0: Check SERVER-SIDE lockout status (cannot be bypassed)
+      const serverStatus = await getGuardLoginStatus(email.trim());
+      if (serverStatus.isLocked) {
+        // Also update local cache for UI consistency
+        const lockoutUntil =
+          serverStatus.lockedUntil?.getTime() || Date.now() + 15 * 60 * 1000;
+        await setRateLimitData({
+          attempts: serverStatus.failedAttempts,
+          lockoutUntil,
+        });
+        setLockoutRemaining(serverStatus.remainingMinutes);
+        setError(
+          `Account locked. Try again in ${serverStatus.remainingMinutes} minutes.`
+        );
+        setIsLoading(false);
+        return;
+      }
+
       // Step 1: Authenticate with Supabase
       const { data: authData, error: authError } =
         await supabase.auth.signInWithPassword({
@@ -127,6 +144,8 @@ export default function LoginScreen() {
         });
 
       if (authError) {
+        // Auth failed - but we need the user ID to increment server-side counter
+        // For now, use local tracking as fallback since we don't have the user ID
         await incrementFailedAttempt();
         setIsLoading(false);
         return;
@@ -154,7 +173,21 @@ export default function LoginScreen() {
       if (userError || !userData) {
         console.log("[Login] FAILED: User not found in database");
         await supabase.auth.signOut();
-        setError("Account not found in system. Contact admin.");
+        // Increment server-side counter since we have the user ID
+        const result = await incrementFailedLogin(authData.user.id);
+        if (result.isNowLocked) {
+          const lockoutUntil = Date.now() + 15 * 60 * 1000;
+          await setRateLimitData({
+            attempts: result.failedAttempts,
+            lockoutUntil,
+          });
+          setLockoutRemaining(15);
+          setError("Too many failed attempts. Account locked for 15 minutes.");
+        } else {
+          setError(
+            `Account not found in system. Contact admin. (${result.remainingAttempts} attempts remaining)`
+          );
+        }
         setIsLoading(false);
         return;
       }
@@ -163,7 +196,18 @@ export default function LoginScreen() {
       if (!userData.is_active) {
         console.log("[Login] FAILED: Account deactivated");
         await supabase.auth.signOut();
-        setError("Your account has been deactivated");
+        const result = await incrementFailedLogin(authData.user.id);
+        if (result.isNowLocked) {
+          const lockoutUntil = Date.now() + 15 * 60 * 1000;
+          await setRateLimitData({
+            attempts: result.failedAttempts,
+            lockoutUntil,
+          });
+          setLockoutRemaining(15);
+          setError("Too many failed attempts. Account locked for 15 minutes.");
+        } else {
+          setError("Your account has been deactivated");
+        }
         setIsLoading(false);
         return;
       }
@@ -172,15 +216,28 @@ export default function LoginScreen() {
       if (!AUTHORIZED_ROLES.includes(userData.role)) {
         console.log("[Login] FAILED: Wrong role -", userData.role);
         await supabase.auth.signOut();
-        setError("Access Denied: Guard or Admin privileges required");
+        const result = await incrementFailedLogin(authData.user.id);
+        if (result.isNowLocked) {
+          const lockoutUntil = Date.now() + 15 * 60 * 1000;
+          await setRateLimitData({
+            attempts: result.failedAttempts,
+            lockoutUntil,
+          });
+          setLockoutRemaining(15);
+          setError("Too many failed attempts. Account locked for 15 minutes.");
+        } else {
+          setError("Access Denied: Guard or Admin privileges required");
+        }
         setIsLoading(false);
         return;
       }
 
       console.log("[Login] SUCCESS: All checks passed");
 
-      // Success! Reset rate limit and navigate explicitly
+      // Success! Reset both server and local rate limits
+      await resetLoginAttempts(authData.user.id);
       await resetRateLimit();
+      setLockoutRemaining(0);
       setIsLoading(false);
 
       // EXPLICIT NAVIGATION - Don't rely on _layout.tsx state changes
@@ -193,12 +250,20 @@ export default function LoginScreen() {
 
   const isLockedOut = lockoutRemaining > 0;
   const scrollViewRef = useRef<ScrollView>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+
+  // Scroll to show email field when keyboard opens
+  const handleEmailFocus = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: 100, animated: true });
+    }, 300);
+  };
 
   // Scroll to show password field when keyboard opens
   const handlePasswordFocus = () => {
-    // Wait for keyboard to fully open before scrolling
     setTimeout(() => {
-      scrollViewRef.current?.scrollTo({ y: 150, animated: true });
+      scrollViewRef.current?.scrollTo({ y: 300, animated: true });
     }, 300);
   };
 
@@ -214,26 +279,34 @@ export default function LoginScreen() {
           ref={scrollViewRef}
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: "center",
-            paddingVertical: 40,
+            paddingTop: 60,
+            paddingBottom: 40,
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           className="px-8"
         >
           {/* Header */}
-          <View className="items-center mb-12">
-            <View className="w-20 h-20 rounded-2xl bg-secondary items-center justify-center mb-6">
-              <Ionicons name="shield-checkmark" size={40} color="#161622" />
+          <View className="items-center mb-10">
+            {/* UOL Logo */}
+            <View className="mb-6">
+              <Image
+                source={require("../assets/uolLogo.png")}
+                style={{ width: 300, height: 130 }}
+                resizeMode="contain"
+              />
             </View>
+
+            {/* App Name */}
             <Text
-              className="text-white text-3xl tracking-tight"
-              style={{ fontWeight: "800", letterSpacing: -1 }}
+              className="text-secondary text-3xl mb-1"
+              style={{
+                fontFamily: "Figtree_800ExtraBold",
+                fontWeight: "800",
+                letterSpacing: -1,
+              }}
             >
               SENTINEL GUARD
-            </Text>
-            <Text className="text-gray-100 text-base mt-2">
-              Security Portal
             </Text>
           </View>
 
@@ -242,7 +315,10 @@ export default function LoginScreen() {
             <View className="bg-amber-500/20 border border-amber-500/50 rounded-xl p-4 mb-6">
               <View className="flex-row items-center justify-center">
                 <Ionicons name="lock-closed" size={20} color="#F59E0B" />
-                <Text className="text-amber-400 text-center font-medium ml-2">
+                <Text
+                  className="text-amber-400 text-center font-medium ml-2"
+                  style={{ fontFamily: "Figtree_500Medium" }}
+                >
                   Account locked for {lockoutRemaining} min
                 </Text>
               </View>
@@ -252,7 +328,10 @@ export default function LoginScreen() {
           {/* Error Message */}
           {error && !isLockedOut && (
             <View className="bg-rose-500/20 border border-rose-500/50 rounded-xl p-4 mb-6">
-              <Text className="text-rose-400 text-center font-medium">
+              <Text
+                className="text-rose-400 text-center font-medium"
+                style={{ fontFamily: "Figtree_500Medium" }}
+              >
                 {error}
               </Text>
             </View>
@@ -260,10 +339,15 @@ export default function LoginScreen() {
 
           {/* Email Input */}
           <View className="mb-4">
-            <Text className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider">
+            <Text
+              className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider"
+              style={{ fontFamily: "Figtree_700Bold" }}
+            >
               Email
             </Text>
             <TextInput
+              ref={emailInputRef}
+              style={{ fontFamily: "Figtree_400Regular" }}
               className="bg-black-100 text-white text-lg p-4 rounded-xl border border-black-200"
               placeholder="guard@university.edu"
               placeholderTextColor="#CDCDE0"
@@ -273,16 +357,22 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoComplete="email"
               editable={!isLockedOut}
+              onFocus={handleEmailFocus}
             />
           </View>
 
           {/* Password Input */}
           <View className="mb-8">
-            <Text className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider">
+            <Text
+              className="text-gray-100 text-sm font-bold mb-2 uppercase tracking-wider"
+              style={{ fontFamily: "Figtree_700Bold" }}
+            >
               Password
             </Text>
             <View className="relative">
               <TextInput
+                ref={passwordInputRef}
+                style={{ fontFamily: "Figtree_400Regular" }}
                 className="bg-black-100 text-white text-lg p-4 pr-14 rounded-xl border border-black-200"
                 placeholder="••••••••"
                 placeholderTextColor="#CDCDE0"
@@ -321,7 +411,11 @@ export default function LoginScreen() {
             ) : (
               <Text
                 className="text-primary text-lg"
-                style={{ fontWeight: "800", letterSpacing: 0.5 }}
+                style={{
+                  fontFamily: "Figtree_800ExtraBold",
+                  fontWeight: "800",
+                  letterSpacing: 0.5,
+                }}
               >
                 {isLockedOut ? "LOCKED" : "AUTHENTICATE"}
               </Text>
@@ -329,7 +423,10 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           {/* Footer */}
-          <Text className="text-gray-100/50 text-center mt-8 mb-12 text-sm">
+          <Text
+            className="text-gray-100/50 text-center mt-8 mb-12 text-sm"
+            style={{ fontFamily: "Figtree_400Regular" }}
+          >
             Authorized Personnel Only
           </Text>
         </ScrollView>

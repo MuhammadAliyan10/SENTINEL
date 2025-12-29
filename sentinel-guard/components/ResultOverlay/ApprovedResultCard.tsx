@@ -72,10 +72,8 @@ export const ApprovedResultCard: React.FC<ApprovedResultCardProps> = ({
 
       {/* Name - Bigger for EXIT */}
       <Text
-        className={`text-gray-900 font-bold text-center ${
-          isEntry ? "text-lg" : "text-2xl"
-        }`}
-        numberOfLines={1}
+        className={`text-gray-900 font-bold text-center ${isEntry ? "text-lg" : "text-2xl"
+          }`}
         style={{ fontFamily: "Figtree_700Bold" }}
       >
         {name.toUpperCase()}
@@ -94,9 +92,8 @@ export const ApprovedResultCard: React.FC<ApprovedResultCardProps> = ({
         <Text className="text-center">
           <Text className={isEntry ? "text-lg" : "text-2xl"}>🕐 </Text>
           <Text
-            className={`text-gray-900 font-bold ${
-              isEntry ? "text-lg" : "text-2xl"
-            }`}
+            className={`text-gray-900 font-bold ${isEntry ? "text-lg" : "text-2xl"
+              }`}
             style={{ fontFamily: "Figtree_700Bold" }}
           >
             {currentTime}
@@ -116,9 +113,8 @@ export const ApprovedResultCard: React.FC<ApprovedResultCardProps> = ({
             SEM
           </Text>
           <Text
-            className={`text-gray-900 font-bold ${
-              isEntry ? "text-lg" : "text-2xl"
-            }`}
+            className={`text-gray-900 font-bold ${isEntry ? "text-lg" : "text-2xl"
+              }`}
             style={{ fontFamily: "Figtree_700Bold" }}
           >
             {semester || "-"}
@@ -134,9 +130,8 @@ export const ApprovedResultCard: React.FC<ApprovedResultCardProps> = ({
             SEC
           </Text>
           <Text
-            className={`text-gray-900 font-bold ${
-              isEntry ? "text-lg" : "text-2xl"
-            }`}
+            className={`text-gray-900 font-bold ${isEntry ? "text-lg" : "text-2xl"
+              }`}
             style={{ fontFamily: "Figtree_700Bold" }}
           >
             {section || "-"}

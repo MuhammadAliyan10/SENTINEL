@@ -1,5 +1,5 @@
 "use client";
-
+import Link from "next/link";
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,7 @@ function ManagerLoginForm() {
     <div className="min-h-screen bg-white flex flex-col">
       {/* Logo Section */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <div className="w-full max-w-sm space-y-8">
+        <div className="w-full max-w-sm space-y-4">
           <div className="flex justify-center">
             <Image
               src="/uolLogo.png"
@@ -160,6 +160,15 @@ function ManagerLoginForm() {
           <p className="text-center text-xs text-muted-foreground">
             Manager portal for CR/GR only
           </p>
+
+          <div className="text-center">
+            <Link
+              href="/about-developers"
+              className="text-xs text-muted-foreground hover:text-primary underline underline-offset-4"
+            >
+              About the Developers
+            </Link>
+          </div>
         </div>
       </div>
     </div>

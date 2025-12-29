@@ -187,6 +187,7 @@ const getCachedPaymentLeaderboard = unstable_cache(
           },
         },
       },
+      take: 50, // Limit query since we only need top 5
     });
 
     return managers
@@ -217,6 +218,7 @@ const getCachedManagerLiability = unstable_cache(
         _count: { select: { createdUsers: true } },
       },
       orderBy: { updatedAt: "desc" },
+      take: 100, // Reasonable limit for liability view
     });
 
     return managers.map((m) => ({

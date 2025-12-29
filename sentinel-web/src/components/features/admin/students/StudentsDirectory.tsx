@@ -91,7 +91,7 @@ export function StudentsDirectory({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [managerInput]);
+  }, [managerInput, currentManagerSearch, router, searchParams]);
 
   const handleRowClick = (studentId: string) => {
     router.push(`/admin/students/${studentId}`);

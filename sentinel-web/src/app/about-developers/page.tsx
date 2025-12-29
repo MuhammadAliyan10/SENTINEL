@@ -21,7 +21,7 @@ const developers = [
     role: "Team Leader & Senior Software Engineer",
     university: "University of Lahore, Sargodha Campus",
     semester: "Semester 7th • Section A",
-    bio: "Never talk to a women.",
+    bio: "Never talk to a woman.",
     description:
       "Built the architecture, planned the implementation, and led the entire development process.",
     image: "/developers/Aliyan.jpeg",

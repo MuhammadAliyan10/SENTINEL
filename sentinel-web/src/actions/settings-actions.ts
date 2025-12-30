@@ -47,14 +47,23 @@ export async function updateTicketPrice(
       return { success: false, error: "Price cannot be negative" };
     }
 
-    await prisma.systemSettings.upsert({
-      where: { key: TICKET_PRICE_KEY },
-      update: { value: price.toString() },
-      create: { key: TICKET_PRICE_KEY, value: price.toString() },
-    });
+    // Update both SystemSettings (legacy) AND the active Event
+    // This ensures getTicketPrice() returns the correct value since it reads from Event first
+    await prisma.$transaction([
+      prisma.systemSettings.upsert({
+        where: { key: TICKET_PRICE_KEY },
+        update: { value: price.toString() },
+        create: { key: TICKET_PRICE_KEY, value: price.toString() },
+      }),
+      prisma.event.updateMany({
+        where: { isDefault: true },
+        data: { ticketPrice: price },
+      }),
+    ]);
 
     revalidatePath("/admin/settings");
     revalidatePath("/manager/dashboard"); // Update manager stats
+    revalidatePath("/admin"); // Update admin dashboard
     return { success: true };
   } catch (error) {
     console.error("Failed to update ticket price:", error);

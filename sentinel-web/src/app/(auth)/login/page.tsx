@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { loginStudent } from "@/actions/student-auth";
 import Image from "next/image";
+import Link from "next/link";
 
 // SECURITY: Validate redirect path to prevent open redirect attacks
 function validateRedirectPath(path: string | null): string {
@@ -203,10 +204,14 @@ function StudentLoginForm() {
             </Button>
           </form>
 
-          {/* Footer */}
-          <p className="text-center text-xs text-muted-foreground">
-            Don&apos;t have a token? Contact your CR/GR
-          </p>
+          <div className="text-center">
+            <Link
+              href="/about-developers"
+              className="text-xs text-muted-foreground hover:text-primary underline underline-offset-4"
+            >
+              About the Developers
+            </Link>
+          </div>
         </div>
       </div>
     </div>

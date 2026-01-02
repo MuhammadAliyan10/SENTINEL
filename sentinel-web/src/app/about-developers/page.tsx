@@ -277,7 +277,7 @@ const developers = [
     role: "Lead App Software Engineer",
     university: "University of Lahore, Sargodha Campus",
     semester: "Semester 7th • Section A",
-    bio: "Played the role of Stephen Hawking’s third leg at Epstein Island.",
+    bio: "Played the role of Dobby in Harry Potter and the Goblet of Fire movie.",
     description:
       "Crafted the mobile application with seamless user experience.",
     image: "/developers/Zeeshan.png",
@@ -293,7 +293,7 @@ const developers = [
     role: "Lead Web Software Engineer",
     university: "University of Lahore, Sargodha Campus",
     semester: "Semester 7th • Section A",
-    bio: "The reason of why Windows started with 7.",
+    bio: "Reason of why Windows started with 7.",
     description:
       "Spearheaded the web application development with cutting-edge technologies.",
     image: "/developers/Hashir.jpg",
